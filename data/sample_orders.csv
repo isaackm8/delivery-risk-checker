@@ -1,0 +1,51 @@
+order_id,order_value,product_name,product_description,origin_zip,destination_zip,ups_service_level,ship_date
+ORD-20481,64.00,Pour-Over Coffee Kit,Ceramic dripper with glass carafe and 100 paper filters,43228,10025,UPS Ground,2026-10-19
+ORD-20482,129.00,Burr Coffee Grinder,Electric conical burr grinder with 18 grind settings,43228,60614,UPS Ground,2026-10-19
+ORD-20483,36.00,Whole Bean Coffee Sampler,Three 12 oz bags of freshly roasted single-origin beans,89502,98103,UPS 3 Day Select,2026-10-19
+ORD-20484,185.00,Enameled Dutch Oven,5.5 qt enameled cast iron Dutch oven with lid,43228,02139,UPS Ground,2026-10-19
+ORD-20485,42.00,Cast Iron Skillet,Pre-seasoned 10-inch cast iron skillet,43228,55408,UPS Ground,2026-10-19
+ORD-20486,449.00,Espresso Machine,Semi-automatic espresso machine with steam wand,89502,94110,UPS 2nd Day Air,2026-10-19
+ORD-20487,38.00,Stoneware Mug Set,Set of four 12 oz stoneware mugs in speckled glaze,43228,30307,UPS Ground,2026-10-19
+ORD-20488,89.00,Walnut Cutting Board,End-grain walnut cutting board 16 x 12 in,43228,33139,UPS Ground,2026-10-20
+ORD-20489,79.00,Gooseneck Kettle,1 L electric gooseneck kettle with temperature control,89502,97214,UPS Ground,2026-10-20
+ORD-20490,115.00,Chef's Knife,8-inch high-carbon stainless steel chef's knife,43228,14222,UPS Ground,2026-10-20
+ORD-20491,48.00,Tea Starter Set,Glass teapot with infuser and four loose-leaf teas,89502,96813,UPS 2nd Day Air,2026-10-20
+ORD-20492,29.00,Olive Wood Utensil Set,Five hand-carved olive wood cooking utensils,43228,70115,UPS Ground,2026-10-20
+ORD-20493,32.00,Cold Brew Maker,1.5 qt glass cold brew pitcher with mesh filter,89502,85004,UPS Ground,2026-10-20
+ORD-20494,45.00,Glass Storage Jars,Set of six airtight glass pantry jars with bamboo lids,43228,19103,UPS Ground,2026-10-20
+ORD-20495,449.00,Espresso Machine,Semi-automatic espresso machine with steam wand,43228,20009,UPS Next Day Air Saver,2026-10-21
+ORD-20496,64.00,Pour-Over Coffee Kit,Ceramic dripper with glass carafe and 100 paper filters,89502,90026,UPS Ground,2026-10-21
+ORD-20497,36.00,Whole Bean Coffee Sampler,Three 12 oz bags of freshly roasted single-origin beans,43228,04101,UPS 3 Day Select,2026-10-21
+ORD-20498,185.00,Enameled Dutch Oven,5.5 qt enameled cast iron Dutch oven with lid,43228,58102,UPS Ground,2026-10-21
+ORD-20499,34.00,Linen Apron,Stonewashed linen apron with adjustable straps,43228,37206,UPS Ground,2026-10-21
+ORD-20500,129.00,Burr Coffee Grinder,Electric conical burr grinder with 18 grind settings,89502,80205,UPS Ground,2026-10-21
+ORD-20501,42.00,Cast Iron Skillet,Pre-seasoned 10-inch cast iron skillet,43228,73103,UPS Ground,2026-10-21
+ORD-20502,79.00,Gooseneck Kettle,1 L electric gooseneck kettle with temperature control,43228,05401,UPS Ground,2026-10-22
+ORD-20503,89.00,Walnut Cutting Board,End-grain walnut cutting board 16 x 12 in,89502,84102,UPS Ground,2026-10-22
+ORD-20504,38.00,Stoneware Mug Set,Set of four 12 oz stoneware mugs in speckled glaze,43228,77006,UPS Ground,2026-10-22
+ORD-20505,115.00,Chef's Knife,8-inch high-carbon stainless steel chef's knife,43228,28203,UPS 3 Day Select,2026-10-22
+ORD-20506,36.00,Whole Bean Coffee Sampler,Three 12 oz bags of freshly roasted single-origin beans,89502,99501,UPS 2nd Day Air,2026-10-22
+ORD-20507,48.00,Tea Starter Set,Glass teapot with infuser and four loose-leaf teas,43228,48201,UPS Ground,2026-10-22
+ORD-20508,45.00,Glass Storage Jars,Set of six airtight glass pantry jars with bamboo lids,43228,64111,UPS Ground,2026-10-22
+ORD-20509,185.00,Enameled Dutch Oven,5.5 qt enameled cast iron Dutch oven with lid,43228,32804,UPS Ground,2026-10-23
+ORD-20510,64.00,Pour-Over Coffee Kit,Ceramic dripper with glass carafe and 100 paper filters,89502,59801,UPS Ground,2026-10-23
+ORD-20511,29.00,Olive Wood Utensil Set,Five hand-carved olive wood cooking utensils,43228,15213,UPS Ground,2026-10-23
+ORD-20512,129.00,Burr Coffee Grinder,Electric conical burr grinder with 18 grind settings,43228,12207,UPS 2nd Day Air,2026-10-23
+ORD-20513,32.00,Cold Brew Maker,1.5 qt glass cold brew pitcher with mesh filter,89502,78704,UPS Ground,2026-10-23
+ORD-20514,42.00,Cast Iron Skillet,Pre-seasoned 10-inch cast iron skillet,43228,53202,UPS Ground,2026-10-23
+ORD-20515,449.00,Espresso Machine,Semi-automatic espresso machine with steam wand,43228,06511,UPS 2nd Day Air,2026-10-23
+ORD-20516,36.00,Whole Bean Coffee Sampler,Three 12 oz bags of freshly roasted single-origin beans,43228,44113,UPS Ground,2026-10-26
+ORD-20517,89.00,Walnut Cutting Board,End-grain walnut cutting board 16 x 12 in,43228,29401,UPS Ground,2026-10-26
+ORD-20518,79.00,Gooseneck Kettle,1 L electric gooseneck kettle with temperature control,89502,83702,UPS Ground,2026-10-26
+ORD-20519,38.00,Stoneware Mug Set,Set of four 12 oz stoneware mugs in speckled glaze,43228,57104,UPS Ground,2026-10-26
+ORD-20520,115.00,Chef's Knife,8-inch high-carbon stainless steel chef's knife,89502,87102,UPS Ground,2026-10-26
+ORD-20521,34.00,Linen Apron,Stonewashed linen apron with adjustable straps,43228,03801,UPS Ground,2026-10-26
+ORD-20522,185.00,Enameled Dutch Oven,5.5 qt enameled cast iron Dutch oven with lid,43228,33602,UPS 3 Day Select,2026-10-26
+ORD-20523,64.00,Pour-Over Coffee Kit,Ceramic dripper with glass carafe and 100 paper filters,43228,23220,UPS Ground,2026-10-26
+ORD-20524,449.00,Espresso Machine,Semi-automatic espresso machine with steam wand,43228,40204,UPS Next Day Air,2026-10-27
+ORD-20525,45.00,Glass Storage Jars,Set of six airtight glass pantry jars with bamboo lids,43228,75204,UPS Ground,2026-10-27
+ORD-20526,48.00,Tea Starter Set,Glass teapot with infuser and four loose-leaf teas,43228,46202,UPS Ground,2026-10-27
+ORD-20527,129.00,Burr Coffee Grinder,Electric conical burr grinder with 18 grind settings,43228,50309,UPS Ground,2026-10-27
+ORD-20528,32.00,Cold Brew Maker,1.5 qt glass cold brew pitcher with mesh filter,43228,63110,UPS Ground,2026-10-27
+ORD-20529,42.00,Cast Iron Skillet,Pre-seasoned 10-inch cast iron skillet,89502,82001,UPS Ground,2026-10-27
+ORD-20530,36.00,Whole Bean Coffee Sampler,Three 12 oz bags of freshly roasted single-origin beans,43228,68102,UPS 3 Day Select,2026-10-27
