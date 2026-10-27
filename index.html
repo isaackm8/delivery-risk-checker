@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Delivery Risk Checker</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <h1>Delivery Risk Checker</h1>
+    <p class="tagline">Upload your shipments CSV to see when each order should arrive.</p>
+  </header>
+
+  <main>
+    <section class="upload" aria-labelledby="upload-heading">
+      <h2 id="upload-heading" class="visually-hidden">Upload orders</h2>
+      <label id="drop-zone" class="drop-zone" for="file-input">
+        <span class="drop-zone-title">Drop a CSV file here</span>
+        <span class="drop-zone-hint">or <span class="link-like">choose a file</span></span>
+        <input id="file-input" type="file" accept=".csv,text/csv">
+      </label>
+      <p class="privacy-note">Your file is read in this browser only. Nothing is uploaded.</p>
+    </section>
+
+    <section id="messages" aria-live="polite"></section>
+
+    <section id="results" hidden>
+      <div id="summary" class="summary"></div>
+      <div id="filter-bar"></div>
+      <div id="row-errors"></div>
+      <div class="table-wrap">
+        <table id="orders-table">
+          <thead></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <p>
+      Estimates use straight-line distance between ZIP codes and typical UPS transit times,
+      skipping weekends and major UPS holidays. They are not UPS's official transit times.
+    </p>
+  </footer>
+
+  <script src="data/zip-coords.js"></script>
+  <script src="js/csv.js"></script>
+  <script src="js/transit.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
