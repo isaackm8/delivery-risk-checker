@@ -22,9 +22,10 @@ const state = {
   loadId: 0,
   weather: new Map(),
   selected: new Set(),
-  // Demo storms (weather.js): off unless switched on in the page or with ?demo=weather.
-  demoWeather: new URLSearchParams(location.search).get("demo") === "weather",
+  // Demo storms (weather.js): on for the sample file, with ?demo=weather, or when switched on.
+  demoWeather: false,
 };
+const DEMO_FROM_ADDRESS = new URLSearchParams(location.search).get("demo") === "weather";
 
 // "Today" decides which orders are delivered, in transit or not shipped yet.
 // It's the computer's date; add ?today=YYYY-MM-DD to the page address to pretend otherwise.
@@ -136,6 +137,12 @@ function loadOrders(text, fileName) {
     return;
   }
 
+  // The sample file's dates are moved to be current today, and demo storms switched on,
+  // so it always shows the same picture. Real files are never changed.
+  const sample = isSampleFile(headers, rows.slice(1));
+  if (sample) moveSampleDates(headers, rows.slice(1));
+  state.demoWeather = sample || DEMO_FROM_ADDRESS;
+
   const orders = [];
   const problems = [];
 
@@ -153,6 +160,14 @@ function loadOrders(text, fileName) {
   state.selected.clear();
   state.loadId++;
 
+  if (sample) {
+    showMessage("info", "This is the sample file, with made-up orders.", [
+      `Its dates have been moved so they're current as of today (${fmtDate(TODAY)}): some orders not shipped yet, some in transit, some delivered.`,
+      "Demo storms are switched on, so you can see weather delays. Weather marked (demo) is made up.",
+      "Your own files are never changed like this.",
+    ]);
+  }
+
   if (problems.length) {
     showMessage(
       "warn",
@@ -168,6 +183,66 @@ function loadOrders(text, fileName) {
   render();
   results.hidden = false;
   checkWeatherFor(orders);
+}
+
+// --- The sample file ---
+
+// The sample is recognized by its made-up data: every customer email is on
+// example.com (a domain reserved for examples) and every tracking number starts 1ZTEST.
+function isSampleFile(headers, dataRows) {
+  const email = headers.indexOf("customer_email");
+  const tracking = headers.indexOf("tracking_number");
+  if (email < 0 || tracking < 0 || dataRows.length < 10) return false;
+  return dataRows.every((cells) => {
+    const e = (cells[email] || "").trim();
+    const t = (cells[tracking] || "").trim();
+    return e.endsWith("@example.com") && (t === "" || t.startsWith("1ZTEST"));
+  });
+}
+
+// Moves every order_date and ship_date by the same number of business days, so that
+// the sample's newest order date (the day it was set up for) becomes today. Gaps
+// between dates stay the same, so each order keeps its processing time and flags.
+function moveSampleDates(headers, dataRows) {
+  const columns = ["order_date", "ship_date"].map((c) => headers.indexOf(c));
+  const orderDates = dataRows.map((cells) => parseDate(cells[columns[0]] || "")).filter(Boolean);
+  if (!orderDates.length) return;
+  const setUpFor = new Date(Math.max(...orderDates));
+  const shift = TODAY >= setUpFor ? businessDaysBetween(setUpFor, TODAY) : -businessDaysBetween(TODAY, setUpFor);
+  if (!shift) return;
+  for (const cells of dataRows) {
+    for (const i of columns) {
+      const date = parseDate(cells[i] || "");
+      if (date) cells[i] = isoDate(shiftByBusinessDays(date, shift));
+    }
+  }
+}
+
+// n business days later (or earlier, if n is negative). A weekend date keeps its
+// distance from the next business day, so a Saturday order stays a Saturday order.
+function shiftByBusinessDays(date, n) {
+  const anchor = nextBusinessDay(date);
+  const offset = Math.round((anchor - date) / 86400000);
+  let d = anchor;
+  for (let left = Math.abs(n); left > 0; ) {
+    d = addDays(d, Math.sign(n));
+    if (isBusinessDay(d)) left--;
+  }
+  return addDays(d, -offset);
+}
+
+async function loadSample() {
+  messages.replaceChildren();
+  try {
+    const response = await fetch("data/sample_orders.csv", { cache: "no-store" });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    loadOrders(await response.text(), "sample_orders.csv");
+  } catch {
+    // Some browsers block this on pages opened straight from a file.
+    showMessage("error", "The sample couldn't be loaded from here.", [
+      "Open data/sample_orders.csv from the project folder (or download it from the field guide) and drop it on the upload box.",
+    ]);
+  }
 }
 
 // --- Weather ---
@@ -244,6 +319,7 @@ function evaluateWeather(o) {
 
 function toggleDemoWeather() {
   state.demoWeather = !state.demoWeather;
+  if (state.filter === "weather") state.filter = "all"; // its orders may disappear
   for (const o of state.orders) evaluateWeather(o);
   render();
 }
@@ -282,19 +358,11 @@ function renderWeatherStatus() {
       ])
     );
   } else {
-    const demo = el("button", {
-      type: "button",
-      class: "link-button",
-      text: state.demoWeather ? "Hide demo storms" : "Show demo storms",
-      title: "Adds made-up storms at a few sample destinations, to demonstrate weather delays.",
-    });
-    demo.addEventListener("click", toggleDemoWeather);
     box.replaceChildren(
       el("p", { class: "weather-status" }, [
         `Weather checked for ${n(checked.length, "order")}: ${hit} likely delayed a day, ` +
           `${pushedPast} of them past the promise. ${mix} `,
-        state.demoWeather ? el("strong", { text: "Demo storms are on: weather marked (demo) is made up. " }) : null,
-        demo,
+        state.demoWeather ? el("strong", { text: "Demo storms are on: weather marked (demo) is made up." }) : null,
       ])
     );
   }
@@ -471,12 +539,14 @@ function delayReasons(o) {
 const FILTERS = {
   all: () => true,
   attention: isFlagged,
+  weather: (o) => o.weather.breaksPromise,
   ground: (o) => o.zone != null,
   air: (o) => o.zone == null,
 };
 const FILTER_HINTS = {
   all: "Show all orders",
   attention: "Show only orders that need attention",
+  weather: "Show only orders that weather could push past the promise",
   ground: "Show only UPS Ground orders",
   air: "Show only air orders",
 };
@@ -703,12 +773,18 @@ function renderSummary() {
   const late = orders.filter((o) => o.risk === "late").length;
   const atRisk = orders.filter((o) => o.risk === "at-risk").length;
   const flagged = late + atRisk;
+  const weatherDelays = orders.filter(FILTERS.weather).length;
 
   document.getElementById("summary").replaceChildren(
     statBox(String(flagged), flagged ? `Need attention (${late} late, ${atRisk} at risk)` : "Need attention", {
       filter: "attention",
       count: flagged,
-      risk: flagged > 0,
+      tone: flagged > 0 ? "risk" : "",
+    }),
+    statBox(String(weatherDelays), weatherDelays === 1 ? "Weather delay" : "Weather delays", {
+      filter: "weather",
+      count: weatherDelays,
+      tone: weatherDelays > 0 ? "weather" : "",
     }),
     statBox(orders.length.toLocaleString("en-US"), "Orders", { filter: "all", count: orders.length }),
     statBox(isoDate(first) === isoDate(last) ? fmtDate(first) : `${fmtDate(first)} – ${fmtDate(last)}`, "Ship dates"),
@@ -725,17 +801,29 @@ function renderSummary() {
   if (TRACKING_SOURCE === "simulated" && orders.some((o) => o.trackingNumber)) {
     notes.push("Shipment progress is simulated from the dates, not live UPS tracking.");
   }
-  document.getElementById("filter-bar").replaceChildren(el("p", { class: "filter-status", text: notes.join(" ") }));
+  // Demo storms switch: a real button so it's easy to find.
+  const demo = el("button", {
+    type: "button",
+    class: `button-secondary demo-toggle${state.demoWeather ? " is-on" : ""}`,
+    "aria-pressed": String(state.demoWeather),
+    text: state.demoWeather ? "Demo storms: on" : "Demo storms: off",
+    title: "Adds made-up storms at a few sample locations, to show how weather delays look. Always marked (demo).",
+  });
+  demo.addEventListener("click", toggleDemoWeather);
+  document.getElementById("filter-bar").replaceChildren(
+    el("div", { class: "filter-row" }, [el("p", { class: "filter-status", text: notes.join(" ") }), demo])
+  );
 }
 
 // A summary box. With a `filter` (and something to show), clicking it filters the
 // table; clicking the active box again goes back to all orders.
-function statBox(value, label, { filter, count = 0, risk = false } = {}) {
+// tone: "risk" (red) or "weather" (blue) when the box has something to show.
+function statBox(value, label, { filter, count = 0, tone = "" } = {}) {
   const content = [
     el("span", { class: "stat-value", text: value }),
     el("span", { class: "stat-label", text: label }),
   ];
-  const cls = `stat${risk ? " stat-risk" : ""}`;
+  const cls = `stat${tone ? ` stat-${tone}` : ""}`;
   if (!filter || count === 0) return el("div", { class: cls }, content);
 
   const active = state.filter === filter;
@@ -865,6 +953,8 @@ fileInput.addEventListener("change", () => {
   handleFile(fileInput.files[0]);
   fileInput.value = ""; // allow re-choosing the same file
 });
+
+document.getElementById("load-sample").addEventListener("click", loadSample);
 
 ["dragenter", "dragover"].forEach((type) =>
   dropZone.addEventListener(type, (e) => {

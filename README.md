@@ -44,7 +44,11 @@ If the merchant knows which orders are at risk before the customer does, they ca
 
 1. Download or clone this repository.
 2. Double-click `index.html` to open it in your browser.
-3. Drop a CSV onto the page, or click **choose a file**. Try `data/sample_orders.csv`.
+3. Drop a CSV onto the page, or click **choose a file**. To just try it, click **Try it with sample orders** (or drop `data/sample_orders.csv`).
+
+The sample file is recognized by its made-up data (every email on `example.com`, every tracking number starting `1ZTEST`). When it's loaded, its dates are moved so the newest order is today, and **demo storms** are switched on, so it shows the same picture whatever day you open it. A blue note on the page says so. Your own files are never changed like this.
+
+(The **Try it** button fetches the file, which some browsers, such as Chrome, block when `index.html` is opened by double-clicking. In that case the page asks you to drop the file instead. On the GitHub Pages site it works.)
 
 To prepare your own file, use the links under the upload box: **Download the template** (`data/orders_template.csv`, the 12 column headers and no orders) and **Read the field guide** (`guide.html`), which explains every column, the accepted formats, and what isn't supported (military APO/FPO and non-US addresses, unknown services, Ground to Hawaii or territories).
 
@@ -110,7 +114,7 @@ Under every flag, **reason labels** say what's causing it (more than one can app
 | **Weather** (blue) | Likely-delay weather pushes delivery past the promise (see Weather below), whether or not the dates were already late | "Destination: Winter Storm Warning (Thu, Oct 29). Could push delivery to Fri, Oct 30." |
 | **Other** (gray) | The dates miss the promise for a reason the app can't pin down; kept for causes it can't see yet, like UPS exceptions once live tracking is connected | |
 
-The summary boxes at the top double as filters: click **Need attention**, **Ground** or **Air** to show only those orders, and click the same box again (or **Orders**) to show all of them. The note under the boxes says how many orders are showing. Sorting by Expected puts late orders first.
+The summary boxes at the top double as filters: click **Need attention**, **Weather delays** (orders that likely-delay weather could push past the promise), **Ground** or **Air** to show only those orders, and click the same box again (or **Orders**) to show all of them. The note under the boxes says how many orders are showing. Sorting by Expected puts late orders first.
 
 ### Weather
 
@@ -138,10 +142,13 @@ Rain alone never counts, only flood alerts. Minor and Moderate alerts (advisorie
 - An order already At risk or Late by its dates keeps that flag and gets the **Weather** label next to its other reasons. Under the Expected date the app lists what it found, where and when, e.g. "Origin: Civil Emergency Message (Thu)" or "Destination: 9 in. snow (Sat)"; hover for details. The Expected dates shown don't change.
 - Each weather line (underlined) has a tooltip: where (warehouse or delivery address, with the ZIP), the dates, the alert or snow amount, and why it counts.
 - The snow forecast reaches about 7 days ahead; later delivery days are still checked for alerts.
+- Each ZIP is looked up once per page session (3 requests: alerts, location, forecast), a few ZIPs at a time, and orders sharing a ZIP share the answer. Reload the page to check fresh.
+- If a lookup fails (no connection, a server error, or no answer within 10 seconds), those orders show "weather unknown", aren't flagged for weather, and a notice offers **Retry**, which asks only for the ZIPs that failed.
+- Limits: it uses the ZIP's center point, so a narrow alert area (e.g. a flood warning along one river) can miss it. "Delivered" is an assumption from the dates, not tracking. A governor's state-of-emergency declaration isn't an NWS alert, so it isn't seen.
 
 ### Demo storms
 
-Real severe weather comes and goes, so on a calm day the sample may show no weather delays at all. **Show demo storms** (next to the weather summary above the table), or `?demo=weather` in the page address, adds made-up storms at a few sample destinations and one warehouse, on days counted from today:
+Real severe weather comes and goes, so on a calm day the sample may show no weather delays at all. Demo storms add made-up storms at a few sample destinations and one warehouse, on days counted from today. They switch on by themselves when the sample file is loaded; the **Demo storms: on/off** button under the summary boxes (or `?demo=weather` in the page address) switches them for any file: made-up storms at a few sample destinations and one warehouse, on days counted from today:
 
 | Demo storm | Where | When (business days from today) | In the sample |
 | --- | --- | --- | --- |
@@ -151,12 +158,11 @@ Real severe weather comes and goes, so on a calm day the sample may show no weat
 | 10 in. of snow | Milwaukee 53202 | day 2 | ORD-20514: still on time (gray) |
 | High Wind Warning | Reno 89502 (warehouse) | day 1 | Unshipped Reno orders: origin weather, still on time |
 
-Demo weather is always marked **(demo)** in the table and tooltips, and the page says demo storms are on. Real alerts still show alongside them. **Hide demo storms** removes them.
-- Each ZIP is looked up once per page session (3 requests: alerts, location, forecast), a few ZIPs at a time, and orders sharing a ZIP share the answer. Reload the page to check fresh.
-- If a lookup fails (no connection, a server error, or no answer within 10 seconds), those orders show "weather unknown", aren't flagged for weather, and a notice offers **Retry**, which asks only for the ZIPs that failed.
-- Limits: it uses the ZIP's center point, so a narrow alert area (e.g. a flood warning along one river) can miss it. "Delivered" is an assumption from the dates, not tracking. A governor's state-of-emergency declaration isn't an NWS alert, so it isn't seen.
+Demo weather is always marked **(demo)** in the table and tooltips, and the page says demo storms are on. Real alerts still show alongside them. Clicking the button again (**Demo storms: off**) removes them.
 
-The sample file's dates are made up and set relative to a day (see Refreshing the sample dates): 15 orders not shipped yet, 20 in transit and 15 likely delivered. Four orders' dates need attention; weather can add more, depending on the day you load it:
+### The sample's orders
+
+The sample file's dates are made up. When loaded in the app they're moved to be current (see above), giving 15 orders not shipped yet, 20 in transit and 15 likely delivered. Four orders' dates need attention, and with demo storms on, weather adds ORD-20486 and ORD-20492 (and a Weather reason on ORD-20498), so the summary shows **6 Need attention** and **3 Weather delays**. Real weather can add more on some days:
 
 | Order | Processing | Transit | Flag |
 | --- | --- | --- | --- |
@@ -196,7 +202,7 @@ The sample file's customers are made up: their emails use `example.com`, a domai
 
 ## Refreshing the sample dates
 
-Fixed dates go stale within days: by next week, every sample order would look delivered. To move them so they're current again:
+The app moves the sample's dates by itself when it loads the file, so this is only needed to keep the file itself current (e.g. for someone opening it in a spreadsheet). Fixed dates go stale within days: by next week, every sample order in the file would look delivered. To move them:
 
 ```
 python tools/refresh_sample_dates.py                      # as of today
