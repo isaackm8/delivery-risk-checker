@@ -9,8 +9,29 @@ const REQUIRED_COLUMNS = [
   "ups_service_level",
   "ship_date",
 ];
+// Optional; needed to notify customers about delays.
+const OPTIONAL_COLUMNS = ["customer_name", "customer_email", "tracking_number"];
 
-const state = { orders: [], filter: "all", sort: { key: "ship", dir: 1 } };
+// loadId increases with every file, so weather results for an older file are ignored.
+// weather maps ZIP -> that location's weather (or { error }) once it arrives.
+// selected holds the order IDs ticked for a delay notice.
+const state = {
+  orders: [],
+  filter: "all",
+  sort: { key: "ship", dir: 1 },
+  loadId: 0,
+  weather: new Map(),
+  selected: new Set(),
+};
+
+// "Today" decides which orders are delivered, in transit or not shipped yet.
+// It's the computer's date; add ?today=YYYY-MM-DD to the page address to pretend otherwise.
+const TODAY = (() => {
+  const override = parseDate(new URLSearchParams(location.search).get("today") || "");
+  if (override) return override;
+  const now = new Date();
+  return new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+})();
 
 const fileInput = document.getElementById("file-input");
 const dropZone = document.getElementById("drop-zone");
@@ -105,7 +126,7 @@ function loadOrders(text, fileName) {
     results.hidden = true;
     showMessage("error", `"${fileName}" is missing ${missing.length === 1 ? "a column" : "columns"}:`, [
       missing.join(", "),
-      `Expected columns: ${REQUIRED_COLUMNS.join(", ")}.`,
+      `Expected columns: ${REQUIRED_COLUMNS.join(", ")}. Optional: ${OPTIONAL_COLUMNS.join(", ")}.`,
     ]);
     return;
   }
@@ -124,6 +145,8 @@ function loadOrders(text, fileName) {
 
   state.orders = orders;
   state.filter = "all";
+  state.selected.clear();
+  state.loadId++;
 
   if (problems.length) {
     showMessage(
@@ -139,6 +162,123 @@ function loadOrders(text, fileName) {
   }
   render();
   results.hidden = false;
+  checkWeatherFor(orders);
+}
+
+// --- Weather ---
+
+// Which places and days could hold a package up (no route data, so only the ends):
+// - delivered (Expected window over): nothing
+// - in transit: the destination on each remaining delivery day
+// - not shipped yet: also the origin on the estimated ship day
+// UPS runs Saturdays but not Sundays, so Saturdays in a window are checked too.
+function weatherChecks(o) {
+  if (o.status === "delivered") return [];
+  const checks = [];
+  if (o.status === "not-shipped") {
+    checks.push({ place: "Origin", zip: o.originZip, coords: o.originCoords, day: o.shipDate });
+  }
+  const from = o.expectedEarliest > TODAY ? o.expectedEarliest : TODAY;
+  for (let day = from; day <= o.expectedLatest; day = addDays(day, 1)) {
+    if (day.getUTCDay() !== 0) {
+      checks.push({ place: "Destination", zip: o.destinationZip, coords: o.destinationCoords, day });
+    }
+  }
+  return checks;
+}
+
+// Looks up each needed ZIP once (weather.js caches it) and re-evaluates every
+// order that uses it as its answer arrives. The table is usable meanwhile.
+function checkWeatherFor(orders) {
+  const loadId = state.loadId;
+  const zips = new Map();
+  for (const o of orders) {
+    for (const c of weatherChecks(o)) {
+      zips.set(c.zip, c.coords);
+      state.weather.delete(c.zip);
+    }
+  }
+  for (const o of orders) evaluateWeather(o);
+  render();
+
+  checkWeatherForZips(zips, (zip, result) => {
+    if (loadId !== state.loadId) return; // a newer file was loaded
+    state.weather.set(zip, result);
+    for (const o of state.orders) evaluateWeather(o);
+    render();
+  });
+}
+
+// Sets o.weather = { status, reasons, unknown, noForecast, delayedTo, breaksPromise } and o.risk.
+function evaluateWeather(o) {
+  const checks = weatherChecks(o);
+  const w = { status: checks.length ? "ok" : "skipped", reasons: [], unknown: [], noForecast: [] };
+  for (const c of checks) {
+    const location = state.weather.get(c.zip);
+    if (!location) {
+      w.status = "pending";
+    } else if (location.error) {
+      if (w.status !== "pending") w.status = "error";
+      w.unknown.push(location.error);
+    } else {
+      const day = isoDate(c.day);
+      const { reasons, noForecast } = weatherOnDay(location, day);
+      for (const r of reasons) w.reasons.push({ ...r, place: c.place, day: c.day });
+      if (noForecast) w.noForecast.push(c.day);
+    }
+  }
+  // Likely-delay weather costs one delivery day (Saturdays count; Sundays and UPS
+  // holidays don't). It only matters if that pushes delivery past the promise.
+  w.delayedTo = w.reasons.length ? nextDeliveryDay(o.expectedLatest) : null;
+  w.breaksPromise = Boolean(w.delayedTo && w.delayedTo > o.promised);
+  o.weather = w;
+  // An order already at risk or late by its dates keeps that flag.
+  o.risk = o.timingRisk === "on-track" && w.breaksPromise ? "at-risk" : o.timingRisk;
+}
+
+function retryWeather() {
+  checkWeatherFor(state.orders.filter((o) => o.weather.status === "error"));
+}
+
+function renderWeatherStatus() {
+  const box = document.getElementById("weather-status");
+  const orders = state.orders;
+  const count = (status) => orders.filter((o) => o.status === status).length;
+  const checked = orders.filter((o) => o.weather.status !== "skipped");
+  const pending = checked.filter((o) => o.weather.status === "pending").length;
+  const failed = checked.filter((o) => o.weather.status === "error");
+  const hit = checked.filter((o) => o.weather.reasons.length).length;
+  const pushedPast = checked.filter((o) => o.weather.breaksPromise).length;
+  const n = (k, word) => `${k} ${word}${k === 1 ? "" : "s"}`;
+  const mix =
+    `${count("not-shipped")} not shipped yet, ${count("in-transit")} in transit, ` +
+    `${count("delivered")} likely delivered (not checked).`;
+
+  if (pending) {
+    box.replaceChildren(
+      el("p", { class: "weather-status", text: `Checking weather for ${n(pending, "order")}… ${mix}` })
+    );
+  } else if (failed.length) {
+    const reasons = [...new Set(failed.flatMap((o) => o.weather.unknown))].join(", ");
+    const retry = el("button", { type: "button", class: "link-button", text: "Retry" });
+    retry.addEventListener("click", retryWeather);
+    box.replaceChildren(
+      el("p", { class: "message warn", role: "status" }, [
+        `Couldn't check weather for ${n(failed.length, "order")} (${reasons}). ` +
+          "Those orders aren't flagged for weather. ",
+        retry,
+      ])
+    );
+  } else {
+    box.replaceChildren(
+      el("p", {
+        class: "weather-status",
+        text:
+          `Weather checked for ${n(checked.length, "order")}: ${hit} likely delayed a day, ` +
+          `${pushedPast} of them past the promise. ${mix}`,
+      })
+    );
+  }
 }
 
 // Returns an order object, or { id, error } describing the first problem found.
@@ -161,12 +301,15 @@ function parseOrder(get) {
     return { id, error: `destination_zip "${get("destination_zip")}" isn't a 5-digit ZIP.` };
   }
 
-  const shipDate = parseDate(get("ship_date"));
+  // A blank ship_date means not shipped yet: assume 1 business day of processing,
+  // or the next shipping day from today if that's already passed.
+  const shipped = get("ship_date") !== "";
+  const shipDate = shipped ? parseDate(get("ship_date")) : estimatedShipDate(orderDate);
   if (!shipDate) {
-    return { id, error: `ship_date "${get("ship_date")}" isn't a date. Use YYYY-MM-DD.` };
+    return { id, error: `ship_date "${get("ship_date")}" isn't a date. Use YYYY-MM-DD, or leave it blank if not shipped.` };
   }
 
-  if (shipDate < orderDate) {
+  if (shipped && shipDate < orderDate) {
     return { id, error: `ship_date ${get("ship_date")} is before order_date ${get("order_date")}.` };
   }
 
@@ -180,9 +323,15 @@ function parseOrder(get) {
 
   // Promised is set at checkout from the order date; Expected comes from the ship date.
   const promised = promisedDate(orderDate);
+  const timing = assessRisk(promised, estimate.earliest, estimate.promised);
 
+  const email = get("customer_email");
   return {
     id,
+    customerName: get("customer_name"),
+    // A malformed email is treated as missing; the notify panel says so.
+    customerEmail: /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email) ? email : "",
+    trackingNumber: shipped ? get("tracking_number").replace(/\s+/g, "") : "",
     orderDate,
     value,
     productName: get("product_name"),
@@ -190,6 +339,8 @@ function parseOrder(get) {
     originZip,
     destinationZip,
     shipDate,
+    shipped,
+    status: !shipped ? "not-shipped" : estimate.promised < TODAY ? "delivered" : "in-transit",
     processingDays: processingDays(orderDate, shipDate),
     serviceLabel: estimate.serviceLabel,
     miles: estimate.miles,
@@ -197,20 +348,33 @@ function parseOrder(get) {
     minDays: estimate.minDays,
     maxDays: estimate.maxDays,
     approximateLocation: estimate.approximateLocation,
+    originCoords: estimate.originCoords,
+    destinationCoords: estimate.destinationCoords,
     promised,
     expectedEarliest: estimate.earliest,
     expectedLatest: estimate.promised,
-    ...assessRisk(promised, estimate.earliest, estimate.promised),
+    ...timing,
+    risk: timing.timingRisk,
+    weather: { status: "skipped", reasons: [], unknown: [], noForecast: [] },
   };
 }
 
+const UNSHIPPED_PROCESSING_DAYS = 1;
+
+function estimatedShipDate(orderDate) {
+  const planned = deliveryDate(orderDate, UNSHIPPED_PROCESSING_DAYS);
+  const soonest = nextBusinessDay(TODAY);
+  return planned > soonest ? planned : soonest;
+}
+
+// Risk from dates alone (weather is added later by evaluateWeather):
 // "late": even the earliest expected date misses the promise.
 // "at-risk": the expected window runs past the promise.
 // "on-track": the whole expected window is on or before the promise.
 function assessRisk(promised, earliest, latest) {
-  if (earliest > promised) return { risk: "late", daysLate: businessDaysBetween(promised, latest) };
-  if (latest > promised) return { risk: "at-risk", daysLate: businessDaysBetween(promised, latest) };
-  return { risk: "on-track", daysLate: 0 };
+  if (earliest > promised) return { timingRisk: "late", daysLate: businessDaysBetween(promised, latest) };
+  if (latest > promised) return { timingRisk: "at-risk", daysLate: businessDaysBetween(promised, latest) };
+  return { timingRisk: "on-track", daysLate: 0 };
 }
 
 const RISK_ORDER = { late: 0, "at-risk": 1, "on-track": 2 };
@@ -251,14 +415,23 @@ const COLUMNS = [
 
 function cellContent(key, o) {
   switch (key) {
-    case "order":
-      return el("div", {}, [
-        el("strong", { class: "nowrap", text: o.id }),
-        el("span", { class: "sub" }, [
-          "Ordered ",
-          el("span", { class: "nowrap", text: fmtDate(o.orderDate) }),
+    case "order": {
+      const notified = notifiedOn(o.id);
+      return el("div", { class: "order-cell" }, [
+        selectBox(o),
+        el("div", {}, [
+          el("strong", { class: "nowrap", text: o.id }),
+          o.customerName ? el("span", { class: "sub", text: o.customerName }) : null,
+          el("span", { class: "sub" }, [
+            "Ordered ",
+            el("span", { class: "nowrap", text: fmtDate(o.orderDate) }),
+          ]),
+          notified
+            ? el("span", { class: "sub notified", text: `Notified ${shortFormat.format(parseDate(notified))}` })
+            : null,
         ]),
       ]);
+    }
     case "product":
       return el("div", { class: "product-cell", title: o.productDescription }, [
         el("span", { text: o.productName }),
@@ -285,6 +458,12 @@ function cellContent(key, o) {
         }),
       ]);
     case "ship":
+      if (!o.shipped) {
+        return el("div", {}, [
+          el("span", { class: "not-shipped", text: "Not shipped" }),
+          el("span", { class: "sub" }, ["est. ", el("span", { class: "nowrap", text: fmtDate(o.shipDate) })]),
+        ]);
+      }
       return el("div", {}, [
         el("span", { class: "nowrap", text: fmtDate(o.shipDate) }),
         el("span", { class: "sub", text: fmtProcessing(o.processingDays) }),
@@ -295,9 +474,53 @@ function cellContent(key, o) {
       return el("div", {}, [
         el("span", { class: "nowrap", text: fmtRange(o.expectedEarliest, o.expectedLatest) }),
         riskBadge(o),
+        weatherNote(o),
       ]);
   }
 }
+
+// Under the Expected date: what weather could delay it, where and when; or why
+// weather wasn't checked or is unknown.
+function weatherNote(o) {
+  const w = o.weather;
+  if (w.status === "skipped") return el("span", { class: "sub", text: "likely delivered" });
+
+  const lines = [];
+  // One line per place + problem, listing the days it applies to.
+  const grouped = new Map();
+  for (const r of w.reasons) {
+    const key = `${r.place}: ${r.text}`;
+    if (!grouped.has(key)) grouped.set(key, { days: [], detail: r.detail });
+    grouped.get(key).days.push(r.day);
+  }
+  // Orange when the weather day breaks the promise, gray when the order still makes it.
+  const tone = w.breaksPromise ? "sub weather-alert" : "sub";
+  for (const [key, { days, detail }] of grouped) {
+    const when = days.map((d) => weekdayFormat.format(d)).join(", ");
+    lines.push(el("span", { class: tone, text: `${key} (${when})`, title: detail }));
+  }
+  if (w.delayedTo) {
+    lines.push(el("span", {
+      class: tone,
+      text: `+1 day: ${fmtDate(w.delayedTo)}, ${w.breaksPromise ? "past the promise" : "still on time"}`,
+      title: "Likely-delay weather is counted as one extra delivery day (UPS delivers Saturdays, not Sundays or holidays).",
+    }));
+  }
+  if (w.status === "error") {
+    lines.push(el("span", { class: "sub", text: "weather unknown", title: `Couldn't check: ${w.unknown.join(", ")}` }));
+  }
+  if (w.noForecast.length) {
+    const first = w.noForecast.reduce((a, b) => (a < b ? a : b));
+    lines.push(el("span", {
+      class: "sub",
+      text: `no snow forecast yet from ${shortFormat.format(first)}`,
+      title: "The snow forecast reaches about 7 days ahead. Alerts are still checked.",
+    }));
+  }
+  return lines.length ? el("span", {}, lines) : null;
+}
+
+const weekdayFormat = new Intl.DateTimeFormat("en-US", { weekday: "short", timeZone: "UTC" });
 
 const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
@@ -307,6 +530,16 @@ function fmtProcessing(days) {
 
 function riskBadge(o) {
   if (!isFlagged(o)) return null;
+  if (o.timingRisk === "on-track") {
+    // Flagged only because of a weather alert at the destination.
+    return el("span", { class: "sub" }, [
+      el("span", {
+        class: "badge warn",
+        text: "At risk · weather",
+        title: `Weather could push delivery to ${fmtDate(o.weather.delayedTo)}, past the ${fmtDate(o.promised)} promise.`,
+      }),
+    ]);
+  }
   const days = plural(o.daysLate, "day");
   const [cls, text] = o.risk === "late" ? ["bad", `Late · ${days}`] : ["warn", `At risk · ${days}`];
   const transit = o.minDays === o.maxDays ? `${o.maxDays}` : `${o.minDays}–${o.maxDays}`;
@@ -315,8 +548,8 @@ function riskBadge(o) {
       class: `badge ${cls}`,
       text,
       title:
-        `${fmtProcessing(o.processingDays)} + ${transit} business days ${o.serviceLabel} transit ` +
-        `runs past the ${PROMISE_BUSINESS_DAYS}-business-day promise.`,
+        `${o.shipped ? "" : "Estimated "}${fmtProcessing(o.processingDays)} + ${transit} business days ` +
+        `${o.serviceLabel} transit runs past the ${PROMISE_BUSINESS_DAYS}-business-day promise.`,
     }),
   ]);
 }
@@ -422,6 +655,57 @@ function renderTable() {
 function render() {
   renderSummary();
   renderTable();
+  renderWeatherStatus();
+  renderSelectionBar();
+}
+
+// --- Selecting orders for a delay notice ---
+
+// Delivered orders can't be selected: there's nothing left to warn about.
+const canNotify = (o) => o.status !== "delivered";
+
+function selectBox(o) {
+  const box = el("input", { type: "checkbox", "aria-label": `Select ${o.id}` });
+  box.checked = state.selected.has(o.id);
+  box.disabled = !canNotify(o);
+  if (box.disabled) box.title = "Likely delivered";
+  box.addEventListener("change", () => {
+    if (box.checked) state.selected.add(o.id);
+    else state.selected.delete(o.id);
+    renderSelectionBar();
+  });
+  return box;
+}
+
+function setSelection(ids) {
+  state.selected = new Set(ids);
+  renderTable();
+  renderSelectionBar();
+}
+
+function renderSelectionBar() {
+  const count = state.selected.size;
+  const needAttention = state.orders.filter((o) => isFlagged(o) && canNotify(o));
+
+  const selectFlagged = el("button", {
+    type: "button",
+    class: "button-secondary",
+    text: `Select all that need attention (${needAttention.length})`,
+  });
+  selectFlagged.disabled = !needAttention.length;
+  selectFlagged.addEventListener("click", () => setSelection(needAttention.map((o) => o.id)));
+
+  const clear = el("button", { type: "button", class: "link-button", text: "Clear" });
+  clear.addEventListener("click", () => setSelection([]));
+
+  const notify = el("button", { type: "button", class: "button-primary", text: "Notify customers…" });
+  notify.disabled = !count;
+  notify.addEventListener("click", openNotifyDialog);
+
+  const parts = [selectFlagged, el("span", { class: "selection-count", text: `${count} selected` })];
+  if (count) parts.push(clear);
+  parts.push(notify);
+  document.getElementById("selection-bar").replaceChildren(...parts);
 }
 
 // Set by clicking a summary box.

@@ -187,6 +187,21 @@ function businessDaysBetween(from, to) {
   return count;
 }
 
+// UPS delivers Saturdays, but not Sundays or UPS holidays. Used for weather delays;
+// the transit estimates themselves still count business days (Mon–Fri).
+function isDeliveryDay(date) {
+  if (date.getUTCDay() === 0) return false;
+  const y = date.getUTCFullYear();
+  const iso = isoDate(date);
+  return !upsHolidays(y).has(iso) && !upsHolidays(y + 1).has(iso);
+}
+
+function nextDeliveryDay(date) {
+  let next = addDays(date, 1);
+  while (!isDeliveryDay(next)) next = addDays(next, 1);
+  return next;
+}
+
 function nextBusinessDay(date) {
   while (!isBusinessDay(date)) date = addDays(date, 1);
   return date;
@@ -249,5 +264,7 @@ function estimateDelivery({ originZip, destinationZip, serviceLevel, shipDate })
     earliest: deliveryDate(shipDate, days[0]),
     promised: deliveryDate(shipDate, days[1]),
     approximateLocation,
+    originCoords: origin.coords,
+    destinationCoords: destination.coords,
   };
 }

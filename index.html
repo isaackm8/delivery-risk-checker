@@ -20,7 +20,11 @@
         <span class="drop-zone-hint">or <span class="link-like">choose a file</span></span>
         <input id="file-input" type="file" accept=".csv,text/csv">
       </label>
-      <p class="privacy-note">Your file is read in this browser only. Nothing is uploaded.</p>
+      <p class="privacy-note">
+        Your file is read in this browser and never uploaded. To check the weather, only the
+        approximate locations (ZIP code centers) of destinations and warehouses are sent to the
+        National Weather Service.
+      </p>
     </section>
 
     <section id="messages" aria-live="polite"></section>
@@ -28,6 +32,8 @@
     <section id="results" hidden>
       <div id="summary" class="summary"></div>
       <div id="filter-bar"></div>
+      <div id="weather-status" aria-live="polite"></div>
+      <div id="selection-bar" class="selection-bar"></div>
       <div id="row-errors"></div>
       <div class="table-wrap">
         <table id="orders-table">
@@ -38,16 +44,23 @@
     </section>
   </main>
 
+  <dialog id="notify-dialog" aria-label="Notify customers about a possible delay"></dialog>
+
   <footer class="site-footer">
     <p>
       Estimates use straight-line distance between ZIP codes and typical UPS transit times,
       skipping weekends and major UPS holidays. They are not UPS's official transit times.
+      Weather alerts and snow forecasts come from the
+      <a href="https://www.weather.gov/documentation/services-web-api">National Weather Service</a>,
+      as of when the file is loaded. Orders are judged as of today; "delivered" is assumed from dates, not tracking.
     </p>
   </footer>
 
   <script src="data/zip-coords.js"></script>
   <script src="js/csv.js"></script>
   <script src="js/transit.js"></script>
+  <script src="js/weather.js"></script>
   <script src="js/app.js"></script>
+  <script src="js/notify.js"></script>
 </body>
 </html>
