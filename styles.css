@@ -391,6 +391,23 @@ th.num { text-align: right; }
 .badge.ok { background: var(--ok-soft); color: var(--ok); }
 .badge.warn { background: var(--warn-soft); color: var(--warn); }
 .badge.bad { background: var(--bad-soft); color: var(--bad); }
+
+/* Why a flagged order may miss its promise. */
+.reason-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.reason-chip {
+  padding: 0 7px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.6;
+  white-space: nowrap;
+  cursor: help;
+}
+.reason-weather { color: var(--accent); background: var(--accent-soft); }
+.has-tip { text-decoration: underline dotted; text-underline-offset: 3px; cursor: help; }
+.reason-processing { color: var(--warn); }
+.reason-transit, .reason-other { color: var(--muted); }
 .badge.neutral { background: var(--accent-soft); color: var(--accent); }
 
 /* Promised and Expected (the last two columns) are pinned to the right edge,

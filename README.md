@@ -82,12 +82,12 @@ Order placed ──(+7 business days)──────────────�
 ```
 
 - **Promised** is the date the customer is told at checkout: **order date + 7 business days**, the slow end of a 5–7 day cushion for processing plus shipping. It's the same for every service level, because processing doesn't prioritize faster services. An order placed on a weekend or holiday counts from the next business day. It never changes.
-- **Processing** is the business days from the order to the ship date (label created, picked up by UPS), shown under each ship date. The order day itself isn't counted, so an order placed Thursday and shipped the following Monday took 2 business days (Friday and Monday).
+- **Processing** is the business days from the order to the ship date (label created, picked up by UPS). The order day itself isn't counted, so an order placed Thursday and shipped the following Monday took 2 business days (Friday and Monday). It isn't shown in the table on its own; when it's longer than the normal 1 business day and that causes a flag, the order gets the **Processing delay** reason, whose tooltip gives the days.
 - **Expected** is when the order will most likely arrive, as a window (e.g. Oct 21–22): **ship date + UPS transit time** (see below). It's **our estimate**, not UPS's own "scheduled delivery" date (hover over the column heading for this note).
 
 ### Shipment progress
 
-Under each shipped order's ship date, the table shows where the package is: **Label created**, **In transit**, **Out for delivery** or **Delivered**. It links to the UPS tracking page for the order's tracking number. A shipped order without a tracking number shows **Tracking # missing** (it still loads; the note under the summary counts them).
+The **Status** column (between Ship date and Promised) shows where each package is now: **Not shipped**, **Label created**, **In transit**, **Out for delivery** or **Delivered**. Shipped statuses link to the UPS tracking page for the order's tracking number. A shipped order without a tracking number shows **Tracking # missing** (it still loads; the note under the summary counts them). For an unshipped order, the Ship date column shows the estimated ship date, marked "estimated". Sorting by Status goes from not shipped to delivered. The order value is shown under the product name.
 
 For now this is **simulated from the dates**, not live UPS data: shipped today is "Label created", the last Expected day is "Out for delivery", after that "Delivered", and in between "In transit". Live tracking would use the UPS Tracking API, which needs a UPS developer account (client ID and secret) and a small server or serverless proxy to keep the secret hidden. The code is set up so that source can replace the simulation (`js/tracking.js`).
 
@@ -97,9 +97,18 @@ Each order whose expected window runs past its promised date is flagged:
 | --- | --- |
 | **At risk · N days** | The latest expected date is after the promise, but the earliest could still make it |
 | **Late · N days** | Even the earliest expected date is after the promise |
-| **At risk · weather** | The dates are fine, but a likely weather delay of one day would push delivery past the promise (see below) |
+| **At risk** (with a Weather label) | The dates are fine, but a likely weather delay of one day would push delivery past the promise (see below) |
 
-*N* is the number of business days past the promise. Hover over a flag to see why, e.g. "4 business days processing + 3–4 business days UPS Ground transit runs past the 7-business-day promise." Date flags come from slow processing, long routes, or both.
+*N* is the number of business days past the promise.
+
+Under every flag, **reason labels** say what's causing it (more than one can apply). Hover a label: the tooltip first explains what that reason means in general, then gives this order's details:
+
+| Reason | When | Example detail |
+| --- | --- | --- |
+| **Processing delay** (orange) | The order shipped, or will ship, later than the merchant's normal processing time of **1 business day** | "Took 4 business days to ship; normal is 1." |
+| **Transit time** (gray) | Even with normal processing, the service and distance take too long for the 7-business-day promise | "UPS Ground (zone 8, 2002 mi) takes 5–7 business days…" |
+| **Weather** (blue) | Likely-delay weather pushes delivery past the promise (see Weather below), whether or not the dates were already late | "Destination: Winter Storm Warning (Thu, Oct 29). Could push delivery to Fri, Oct 30." |
+| **Other** (gray) | The dates miss the promise for a reason the app can't pin down; kept for causes it can't see yet, like UPS exceptions once live tracking is connected | |
 
 The summary boxes at the top double as filters: click **Need attention**, **Ground** or **Air** to show only those orders, and click the same box again (or **Orders**) to show all of them. The note under the boxes says how many orders are showing. Sorting by Expected puts late orders first.
 
@@ -109,7 +118,7 @@ We don't know a package's route, so the app checks the two ends, on the days tha
 
 | Order (as of today) | How the app tells | What's checked |
 | --- | --- | --- |
-| **Likely delivered** | Its Expected window has passed | Nothing; it shows "likely delivered" |
+| **Likely delivered** | Its Expected window has passed | Nothing; its Status shows "Delivered" |
 | **In transit** | Shipped, Expected window not over | Destination, on each remaining day of the Expected window |
 | **Not shipped yet** | Blank `ship_date` | Origin on the estimated ship day, and destination on each day of the Expected window |
 
@@ -124,10 +133,25 @@ A day counts as a likely delay at a place if any of these is true:
 Rain alone never counts, only flood alerts. Minor and Moderate alerts (advisories, statements) are ignored.
 
 - Likely-delay weather counts as **one extra delivery day** after the latest Expected date, however many bad days there are. UPS delivers Saturdays, so a Friday delivery slips to Saturday; Sundays and UPS holidays are skipped, so a Saturday delivery slips to Monday.
-- If that day lands **after the promise**, an on-track order becomes **At risk · weather**, shown in orange: e.g. expected Oct 29–30, promised Fri Oct 30, storm Thursday: "+1 day: Sat, Oct 31, past the promise".
+- If that day lands **after the promise**, the order gets the **Weather** reason label (an on-track order becomes **At risk**), and the details show in orange: e.g. expected Oct 29–30, promised Fri Oct 30, storm Thursday: "+1 day: Sat, Oct 31, past the promise".
 - If it still lands **on or before the promise**, the order isn't flagged. The weather is listed in gray with "+1 day: …, still on time", so the merchant can still see it.
-- An order already At risk or Late by its dates keeps that flag, with the weather listed under it. Under the Expected date the app lists what it found, where and when, e.g. "Origin: Civil Emergency Message (Thu)" or "Destination: 9 in. snow (Sat)"; hover for details. The Expected dates shown don't change.
-- A delivery day beyond the snow forecast shows "no snow forecast yet from …". Alerts are still checked.
+- An order already At risk or Late by its dates keeps that flag and gets the **Weather** label next to its other reasons. Under the Expected date the app lists what it found, where and when, e.g. "Origin: Civil Emergency Message (Thu)" or "Destination: 9 in. snow (Sat)"; hover for details. The Expected dates shown don't change.
+- Each weather line (underlined) has a tooltip: where (warehouse or delivery address, with the ZIP), the dates, the alert or snow amount, and why it counts.
+- The snow forecast reaches about 7 days ahead; later delivery days are still checked for alerts.
+
+### Demo storms
+
+Real severe weather comes and goes, so on a calm day the sample may show no weather delays at all. **Show demo storms** (next to the weather summary above the table), or `?demo=weather` in the page address, adds made-up storms at a few sample destinations and one warehouse, on days counted from today:
+
+| Demo storm | Where | When (business days from today) | In the sample |
+| --- | --- | --- | --- |
+| High Wind Warning | San Francisco 94110 | day 1 | ORD-20486: **At risk** + Weather (no cushion) |
+| Flood Warning | New Orleans 70115 | days 3–4 | ORD-20492: **At risk** + Weather |
+| Winter Storm Warning | Fargo 58102 | days 3–4 | ORD-20498: already **Late**; gets Processing delay + Weather |
+| 10 in. of snow | Milwaukee 53202 | day 2 | ORD-20514: still on time (gray) |
+| High Wind Warning | Reno 89502 (warehouse) | day 1 | Unshipped Reno orders: origin weather, still on time |
+
+Demo weather is always marked **(demo)** in the table and tooltips, and the page says demo storms are on. Real alerts still show alongside them. **Hide demo storms** removes them.
 - Each ZIP is looked up once per page session (3 requests: alerts, location, forecast), a few ZIPs at a time, and orders sharing a ZIP share the answer. Reload the page to check fresh.
 - If a lookup fails (no connection, a server error, or no answer within 10 seconds), those orders show "weather unknown", aren't flagged for weather, and a notice offers **Retry**, which asks only for the ZIPs that failed.
 - Limits: it uses the ZIP's center point, so a narrow alert area (e.g. a flood warning along one river) can miss it. "Delivered" is an assumption from the dates, not tracking. A governor's state-of-emergency declaration isn't an NWS alert, so it isn't seen.

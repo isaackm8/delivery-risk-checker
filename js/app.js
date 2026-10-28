@@ -22,6 +22,8 @@ const state = {
   loadId: 0,
   weather: new Map(),
   selected: new Set(),
+  // Demo storms (weather.js): off unless switched on in the page or with ?demo=weather.
+  demoWeather: new URLSearchParams(location.search).get("demo") === "weather",
 };
 
 // "Today" decides which orders are delivered, in transit or not shipped yet.
@@ -217,7 +219,8 @@ function evaluateWeather(o) {
   const checks = weatherChecks(o);
   const w = { status: checks.length ? "ok" : "skipped", reasons: [], unknown: [], noForecast: [] };
   for (const c of checks) {
-    const location = state.weather.get(c.zip);
+    const real = state.weather.get(c.zip);
+    const location = state.demoWeather ? withDemoStorms(c.zip, real, TODAY) : real;
     if (!location) {
       w.status = "pending";
     } else if (location.error) {
@@ -237,6 +240,12 @@ function evaluateWeather(o) {
   o.weather = w;
   // An order already at risk or late by its dates keeps that flag.
   o.risk = o.timingRisk === "on-track" && w.breaksPromise ? "at-risk" : o.timingRisk;
+}
+
+function toggleDemoWeather() {
+  state.demoWeather = !state.demoWeather;
+  for (const o of state.orders) evaluateWeather(o);
+  render();
 }
 
 function retryWeather() {
@@ -273,13 +282,20 @@ function renderWeatherStatus() {
       ])
     );
   } else {
+    const demo = el("button", {
+      type: "button",
+      class: "link-button",
+      text: state.demoWeather ? "Hide demo storms" : "Show demo storms",
+      title: "Adds made-up storms at a few sample destinations, to demonstrate weather delays.",
+    });
+    demo.addEventListener("click", toggleDemoWeather);
     box.replaceChildren(
-      el("p", {
-        class: "weather-status",
-        text:
-          `Weather checked for ${n(checked.length, "order")}: ${hit} likely delayed a day, ` +
-          `${pushedPast} of them past the promise. ${mix}`,
-      })
+      el("p", { class: "weather-status" }, [
+        `Weather checked for ${n(checked.length, "order")}: ${hit} likely delayed a day, ` +
+          `${pushedPast} of them past the promise. ${mix} `,
+        state.demoWeather ? el("strong", { text: "Demo storms are on: weather marked (demo) is made up. " }) : null,
+        demo,
+      ])
     );
   }
 }
@@ -362,10 +378,12 @@ function parseOrder(get) {
   };
 }
 
-const UNSHIPPED_PROCESSING_DAYS = 1;
+// The merchant's normal order-to-ship time. Unshipped orders are assumed to take
+// this long, and a shipped order that took longer has a "processing delay".
+const NORMAL_PROCESSING_DAYS = 1;
 
 function estimatedShipDate(orderDate) {
-  const planned = deliveryDate(orderDate, UNSHIPPED_PROCESSING_DAYS);
+  const planned = deliveryDate(orderDate, NORMAL_PROCESSING_DAYS);
   const soonest = nextBusinessDay(TODAY);
   return planned > soonest ? planned : soonest;
 }
@@ -383,6 +401,72 @@ function assessRisk(promised, earliest, latest) {
 const RISK_ORDER = { late: 0, "at-risk": 1, "on-track": 2 };
 const isFlagged = (o) => o.risk !== "on-track";
 
+// What each reason means in general; shown first in the reason label's tooltip,
+// followed by the order's own details.
+const REASON_HELP = {
+  processing:
+    "Processing delay: the time between the order and the shipment (picking, packing and printing the " +
+    `label) took longer than the normal ${NORMAL_PROCESSING_DAYS} business day${NORMAL_PROCESSING_DAYS === 1 ? "" : "s"}. Every extra day ` +
+    `of processing uses up part of the ${PROMISE_BUSINESS_DAYS}-business-day promise before UPS even has the package.`,
+  transit:
+    "Transit time: the UPS service chosen takes too long over this distance to fit inside the " +
+    `${PROMISE_BUSINESS_DAYS}-business-day promise, even when the order ships on time. A faster service ` +
+    "or a longer promise would fix it.",
+  weather:
+    "Weather: a severe-weather or emergency alert, or more than 8 inches of snow, is expected at the " +
+    "warehouse on the ship day or at the delivery address while the package is due. That usually adds about " +
+    "a day, which would push delivery past the promise.",
+  other: "Other: the dates miss the promise for a reason the checker can't pin down.",
+};
+
+// Why a flagged order may miss its promise; more than one can apply.
+//   processing: it shipped (or will ship) later than normal processing allows
+//   transit:    even with normal processing, the service/route takes too long for the promise
+//   weather:    likely-delay weather pushes delivery past the promise
+//   other:      date-flagged, but neither of the above explains it
+// Returns [{ code, label, detail }].
+function delayReasons(o) {
+  if (!isFlagged(o)) return [];
+  const reasons = [];
+
+  if (o.timingRisk !== "on-track") {
+    const normalShip = deliveryDate(o.orderDate, NORMAL_PROCESSING_DAYS);
+    if (o.shipDate > normalShip) {
+      reasons.push({
+        code: "processing",
+        label: "Processing delay",
+        detail: o.shipped
+          ? `Took ${plural(o.processingDays, "business day")} to ship; normal is ${NORMAL_PROCESSING_DAYS}.`
+          : `Not shipped yet: the earliest it can ship is ${fmtDate(o.shipDate)}; normally it would have shipped ${fmtDate(normalShip)}.`,
+      });
+    }
+    if (deliveryDate(normalShip, o.maxDays) > o.promised) {
+      const days = o.minDays === o.maxDays ? `${o.maxDays}` : `${o.minDays}–${o.maxDays}`;
+      reasons.push({
+        code: "transit",
+        label: "Transit time",
+        detail:
+          `${o.serviceLabel}${o.zone ? ` (zone ${o.zone}, ${Math.round(o.miles)} mi)` : ""} takes ${days} business days: ` +
+          `too long for the ${PROMISE_BUSINESS_DAYS}-business-day promise even with normal processing.`,
+      });
+    }
+    if (!reasons.length) {
+      reasons.push({ code: "other", label: "Other", detail: "The dates miss the promise for a reason the app can't pin down." });
+    }
+  }
+
+  if (o.weather.breaksPromise) {
+    reasons.push({
+      code: "weather",
+      label: "Weather",
+      detail:
+        o.weather.reasons.map((r) => `${r.place}: ${r.text} (${fmtDate(r.day)})`).join("; ") +
+        `. Could push delivery to ${fmtDate(o.weather.delayedTo)}.`,
+    });
+  }
+  return reasons;
+}
+
 // Which orders the table shows; set by clicking a summary box.
 const FILTERS = {
   all: () => true,
@@ -399,13 +483,29 @@ const FILTER_HINTS = {
 
 // --- Rendering ---
 
+const STATUS_ORDER = {
+  "not-shipped": 0,
+  missing: 1,
+  "label-created": 2,
+  "in-transit": 3,
+  "out-for-delivery": 4,
+  delivered: 5,
+};
+
 const COLUMNS = [
   { key: "order", label: "Order", sortValue: (o) => o.id },
+  // The order value is shown under the product name (no column of its own, to keep the table narrow).
   { key: "product", label: "Product", sortValue: (o) => o.productName.toLowerCase() },
-  { key: "value", label: "Value", num: true, sortValue: (o) => o.value },
   { key: "route", label: "Route", sortValue: (o) => o.miles },
   { key: "service", label: "Service", sortValue: (o) => o.maxDays * 100 + (o.zone ?? 0) },
   { key: "ship", label: "Ship date", sortValue: (o) => o.shipDate.getTime() },
+  // Where the package is now; reads left to right: shipped, status now, promised, expected.
+  {
+    key: "status",
+    label: "Status",
+    title: "Shipment progress. Simulated from the dates for now, not live UPS tracking.",
+    sortValue: (o) => STATUS_ORDER[shipmentProgress(o)?.stage ?? "not-shipped"],
+  },
   { key: "promised", label: "Promised", sortValue: (o) => o.promised.getTime() },
   // Last on purpose: weather scoring will move this date, while Promised stays fixed.
   // Sorting puts late orders first, then at-risk, then on-track.
@@ -441,10 +541,9 @@ function cellContent(key, o) {
     case "product":
       return el("div", { class: "product-cell", title: o.productDescription }, [
         el("span", { text: o.productName }),
+        el("span", { class: "sub price", text: fmtMoney(o.value) }),
         el("span", { class: "sub", text: o.productDescription }),
       ]);
-    case "value":
-      return fmtMoney(o.value);
     case "route":
       return el("div", {}, [
         el("span", { class: "nowrap", text: `${o.originZip} → ${o.destinationZip}` }),
@@ -464,17 +563,17 @@ function cellContent(key, o) {
         }),
       ]);
     case "ship":
+      // Unshipped: the estimated ship date. Processing time isn't shown here; it's in the
+      // "Processing delay" reason when it matters.
       if (!o.shipped) {
         return el("div", {}, [
-          el("span", { class: "not-shipped", text: "Not shipped" }),
-          el("span", { class: "sub" }, ["est. ", el("span", { class: "nowrap", text: fmtDate(o.shipDate) })]),
+          el("span", { class: "nowrap", text: fmtDate(o.shipDate) }),
+          el("span", { class: "sub", text: "estimated" }),
         ]);
       }
-      return el("div", {}, [
-        el("span", { class: "nowrap", text: fmtDate(o.shipDate) }),
-        el("span", { class: "sub", text: fmtProcessing(o.processingDays) }),
-        progressLine(o),
-      ]);
+      return el("span", { class: "nowrap", text: fmtDate(o.shipDate) });
+    case "status":
+      return o.shipped ? progressLine(o) : el("span", { class: "not-shipped", text: "Not shipped" });
     case "promised":
       return el("span", { class: "promised nowrap", text: fmtDate(o.promised) });
     case "expected":
@@ -486,7 +585,7 @@ function cellContent(key, o) {
   }
 }
 
-// Under the ship date: where the package is (see tracking.js), linked to UPS.
+// The Status column for shipped orders: where the package is (see tracking.js), linked to UPS.
 function progressLine(o) {
   const p = shipmentProgress(o);
   if (!p) return null;
@@ -514,7 +613,8 @@ function progressLine(o) {
 // weather wasn't checked or is unknown.
 function weatherNote(o) {
   const w = o.weather;
-  if (w.status === "skipped") return el("span", { class: "sub", text: "likely delivered" });
+  // Delivered orders aren't checked; their status shows once, in the Status column.
+  if (w.status === "skipped") return null;
 
   const lines = [];
   // One line per place + problem, listing the days it applies to.
@@ -528,7 +628,14 @@ function weatherNote(o) {
   const tone = w.breaksPromise ? "sub weather-alert" : "sub";
   for (const [key, { days, detail }] of grouped) {
     const when = days.map((d) => weekdayFormat.format(d)).join(", ");
-    lines.push(el("span", { class: tone, text: `${key} (${when})`, title: detail }));
+    const where = key.startsWith("Origin")
+      ? `At the warehouse (ZIP ${o.originZip}) on the day the order should ship`
+      : `At the delivery address (ZIP ${o.destinationZip}) while the package is due`;
+    lines.push(el("span", {
+      class: `${tone} has-tip`,
+      text: `${key} (${when})`,
+      title: `${where}: ${days.map(fmtDate).join(", ")}. ${detail}`,
+    }));
   }
   if (w.delayedTo) {
     lines.push(el("span", {
@@ -539,14 +646,6 @@ function weatherNote(o) {
   }
   if (w.status === "error") {
     lines.push(el("span", { class: "sub", text: "weather unknown", title: `Couldn't check: ${w.unknown.join(", ")}` }));
-  }
-  if (w.noForecast.length) {
-    const first = w.noForecast.reduce((a, b) => (a < b ? a : b));
-    lines.push(el("span", {
-      class: "sub",
-      text: `no snow forecast yet from ${shortFormat.format(first)}`,
-      title: "The snow forecast reaches about 7 days ahead. Alerts are still checked.",
-    }));
   }
   return lines.length ? el("span", {}, lines) : null;
 }
@@ -559,29 +658,38 @@ function fmtProcessing(days) {
   return days === 0 ? "same-day processing" : `${plural(days, "business day")} processing`;
 }
 
+// The flag (At risk / Late) plus a label for each reason; hover a label for details.
 function riskBadge(o) {
   if (!isFlagged(o)) return null;
+  let badge;
   if (o.timingRisk === "on-track") {
-    // Flagged only because of a weather alert at the destination.
-    return el("span", { class: "sub" }, [
-      el("span", {
-        class: "badge warn",
-        text: "At risk · weather",
-        title: `Weather could push delivery to ${fmtDate(o.weather.delayedTo)}, past the ${fmtDate(o.promised)} promise.`,
-      }),
-    ]);
-  }
-  const days = plural(o.daysLate, "day");
-  const [cls, text] = o.risk === "late" ? ["bad", `Late · ${days}`] : ["warn", `At risk · ${days}`];
-  const transit = o.minDays === o.maxDays ? `${o.maxDays}` : `${o.minDays}–${o.maxDays}`;
-  return el("span", { class: "sub" }, [
-    el("span", {
+    // Flagged only because of weather.
+    badge = el("span", {
+      class: "badge warn",
+      text: "At risk",
+      title: `Weather could push delivery to ${fmtDate(o.weather.delayedTo)}, past the ${fmtDate(o.promised)} promise.`,
+    });
+  } else {
+    const days = plural(o.daysLate, "day");
+    const [cls, text] = o.risk === "late" ? ["bad", `Late · ${days}`] : ["warn", `At risk · ${days}`];
+    const transit = o.minDays === o.maxDays ? `${o.maxDays}` : `${o.minDays}–${o.maxDays}`;
+    badge = el("span", {
       class: `badge ${cls}`,
       text,
       title:
         `${o.shipped ? "" : "Estimated "}${fmtProcessing(o.processingDays)} + ${transit} business days ` +
         `${o.serviceLabel} transit runs past the ${PROMISE_BUSINESS_DAYS}-business-day promise.`,
-    }),
+    });
+  }
+  return el("span", { class: "sub" }, [
+    badge,
+    el(
+      "span",
+      { class: "reason-chips" },
+      delayReasons(o).map((r) =>
+        el("span", { class: `reason-chip reason-${r.code}`, text: r.label, title: `${REASON_HELP[r.code]}\n\nThis order: ${r.detail}` })
+      )
+    ),
   ]);
 }
 

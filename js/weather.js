@@ -133,22 +133,70 @@ function localDay(date, timeZone) {
   return new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(date);
 }
 
+const DELAY_NOTE = "Weather like this usually slows or stops deliveries, so the checker counts one extra delivery day.";
+const DEMO_NOTE = "Demo storm: made-up weather for demonstrations, not a real forecast.";
+
 // What could delay a package at this location on this day (YYYY-MM-DD):
-// returns { reasons: [...] } or { noForecast: true } when the day is past the snow forecast.
+// returns { reasons: [{ text, detail }], noForecast } (noForecast: the day is past the snow forecast).
 function weatherOnDay(location, day) {
   const reasons = location.alerts
     .filter((a) => localDay(a.start, location.timeZone) <= day &&
       (!a.end || localDay(new Date(a.end.getTime() - 60000), location.timeZone) >= day))
-    .map((a) => ({ text: a.event, detail: a.headline }));
+    .map((a) => ({
+      text: a.demo ? `${a.event} (demo)` : a.event,
+      detail: [a.demo ? DEMO_NOTE : null, a.headline, DELAY_NOTE].filter(Boolean).join(" "),
+    }));
 
   // Rounded to 0.1 in. so splitting blocks into hours can't turn exactly 8 into "over 8".
   const inches = Math.round((location.snowInches[day] || 0) * 10) / 10;
   if (inches > SNOW_LIMIT_INCHES) {
+    const demo = Boolean(location.demoSnowDays && location.demoSnowDays.includes(day));
     reasons.push({
-      text: `${Math.round(inches)} in. snow`,
-      detail: `About ${inches.toFixed(1)} inches of snow forecast that day.`,
+      text: `${Math.round(inches)} in. snow${demo ? " (demo)" : ""}`,
+      detail: [
+        demo ? DEMO_NOTE : null,
+        `About ${inches.toFixed(1)} inches of snow forecast that day (more than ${SNOW_LIMIT_INCHES} counts).`,
+        DELAY_NOTE,
+      ].filter(Boolean).join(" "),
     });
   }
   const noForecast = !location.forecastUntil || day > location.forecastUntil;
   return { reasons, noForecast };
+}
+
+// --- Demo storms ---
+// Made-up weather at a few sample destinations (and one warehouse), so the weather
+// feature has something to show on calm days. Days are business days from today,
+// matching how the sample dates are set. Switched on in the page or with ?demo=weather.
+const DEMO_STORMS = [
+  { zip: "94110", event: "High Wind Warning", from: 1, to: 1 }, // San Francisco
+  { zip: "89502", event: "High Wind Warning", from: 1, to: 1 }, // Reno (warehouse)
+  { zip: "70115", event: "Flood Warning", from: 3, to: 4 }, // New Orleans
+  { zip: "58102", event: "Winter Storm Warning", from: 3, to: 4 }, // Fargo
+  { zip: "53202", snowInches: 10, on: 2 }, // Milwaukee
+];
+
+// A copy of a location's weather with any demo storms for that ZIP added.
+function withDemoStorms(zip, location, today) {
+  const storms = DEMO_STORMS.filter((s) => s.zip === zip);
+  if (!storms.length || !location || location.error) return location;
+  const day = (n) => deliveryDate(today, n); // n business days after today
+  const at = (date, hourUTC) => new Date(date.getTime() + hourUTC * 3600000);
+  const copy = { ...location, alerts: [...location.alerts], snowInches: { ...location.snowInches }, demoSnowDays: [] };
+  for (const s of storms) {
+    if (s.event) {
+      copy.alerts.push({
+        event: s.event,
+        headline: `${s.event} for this area.`,
+        start: at(day(s.from), 15), // mid-morning to afternoon US time
+        end: at(day(s.to), 23),
+        demo: true,
+      });
+    } else {
+      const d = isoDate(day(s.on));
+      copy.snowInches[d] = (copy.snowInches[d] || 0) + s.snowInches;
+      copy.demoSnowDays.push(d);
+    }
+  }
+  return copy;
 }
