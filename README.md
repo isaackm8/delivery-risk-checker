@@ -46,6 +46,8 @@ If the merchant knows which orders are at risk before the customer does, they ca
 2. Double-click `index.html` to open it in your browser.
 3. Drop a CSV onto the page, or click **choose a file**. Try `data/sample_orders.csv`.
 
+To prepare your own file, use the links under the upload box: **Download the template** (`data/orders_template.csv`, the 12 column headers and no orders) and **Read the field guide** (`guide.html`), which explains every column, the accepted formats, and what isn't supported (military APO/FPO and non-US addresses, unknown services, Ground to Hawaii or territories).
+
 There's nothing to install. The file is read in your browser and never uploaded. The only network traffic is the weather check: approximate locations (ZIP code center points, not addresses) of destinations, and of origins for unshipped orders, are sent to the National Weather Service.
 
 The app judges each order as of **today** (your computer's date). To see it as of another day, add `?today=YYYY-MM-DD` to the page address, e.g. `index.html?today=2026-10-28`. Without an internet connection everything else still works, and the page says weather couldn't be checked.
@@ -65,7 +67,7 @@ The app judges each order as of **today** (your computer's date). To see it as o
 | `destination_zip` | `02139` | Same as above |
 | `ups_service_level` | `UPS Ground` | Ground, 3 Day Select, 2nd Day Air, Next Day Air Saver or Next Day Air |
 | `ship_date` | `2026-10-19` | When the label was created and UPS picked it up. `10/19/2026` also works. **Leave blank if not shipped yet** |
-| `tracking_number` | `1Z999AA10123456784` | Optional; the UPS tracking number, so the customer can reroute or hold the package |
+| `tracking_number` | `1Z999AA10123456784` | Optional, but every shipped order should have one: it's linked from the shipment progress and the delay notice (to reroute or hold). Missing on a shipped order: flagged "Tracking # missing" |
 
 Rows with a problem (unknown service level, bad ZIP or date, Ground to or from Hawaii, a ship date before the order date) are skipped and listed with the reason.
 
@@ -81,7 +83,13 @@ Order placed ──(+7 business days)──────────────�
 
 - **Promised** is the date the customer is told at checkout: **order date + 7 business days**, the slow end of a 5–7 day cushion for processing plus shipping. It's the same for every service level, because processing doesn't prioritize faster services. An order placed on a weekend or holiday counts from the next business day. It never changes.
 - **Processing** is the business days from the order to the ship date (label created, picked up by UPS), shown under each ship date. The order day itself isn't counted, so an order placed Thursday and shipped the following Monday took 2 business days (Friday and Monday).
-- **Expected** is when the order will most likely arrive, as a window (e.g. Oct 21–22): **ship date + UPS transit time** (see below).
+- **Expected** is when the order will most likely arrive, as a window (e.g. Oct 21–22): **ship date + UPS transit time** (see below). It's **our estimate**, not UPS's own "scheduled delivery" date (hover over the column heading for this note).
+
+### Shipment progress
+
+Under each shipped order's ship date, the table shows where the package is: **Label created**, **In transit**, **Out for delivery** or **Delivered**. It links to the UPS tracking page for the order's tracking number. A shipped order without a tracking number shows **Tracking # missing** (it still loads; the note under the summary counts them).
+
+For now this is **simulated from the dates**, not live UPS data: shipped today is "Label created", the last Expected day is "Out for delivery", after that "Delivered", and in between "In transit". Live tracking would use the UPS Tracking API, which needs a UPS developer account (client ID and secret) and a small server or serverless proxy to keep the secret hidden. The code is set up so that source can replace the simulation (`js/tracking.js`).
 
 Each order whose expected window runs past its promised date is flagged:
 
@@ -200,9 +208,12 @@ These are rules of thumb, not UPS's official transit times.
 | Path | What it is |
 | --- | --- |
 | `index.html`, `styles.css` | The page and its look (laptop table, phone cards, light and dark mode) |
+| `guide.html` | The CSV field guide: what each column means, formats and constraints |
+| `data/orders_template.csv` | Blank order file with the 12 column headers |
 | `js/app.js` | Upload, row checks, late / at-risk flags, summary and results table |
 | `js/transit.js` | Delivery rules: the 7-day promise, service levels, zones, distance, holidays |
 | `js/csv.js` | Reads CSV text into rows |
+| `js/tracking.js` | Shipment progress (simulated from dates for now; the place to plug in UPS tracking) |
 | `js/notify.js` | Delay notices: message building, the notify panel, email drafts, copy, CSV export, "notified" memory |
 | `js/weather.js` | Weather lookups from the National Weather Service (alerts, emergencies, snow forecast by day), with a per-ZIP cache |
 | `data/zip-coords.js` | Latitude and longitude for 33,791 ZIP codes |

@@ -35,7 +35,7 @@ The app's "today" is the computer's date; `index.html?today=YYYY-MM-DD` override
 
 Plain HTML, CSS and JavaScript, no build step, no dependencies. The user opens `index.html` by double-clicking it. The only network calls are to the NWS API (`js/weather.js`); everything else must keep working offline.
 
-- Scripts load as plain `<script>` tags in a fixed order (`data/zip-coords.js`, `js/csv.js`, `js/transit.js`, `js/weather.js`, `js/app.js`, `js/notify.js`) and share globals. notify.js comes last because it uses app.js helpers (`el`, `fmtDate`, `state`, `render`); app.js only calls into it from event handlers and rendering, never at load. **Don't switch to ES modules**: browsers block them on `file://`, which would break double-click.
+- Scripts load as plain `<script>` tags in a fixed order (`data/zip-coords.js`, `js/csv.js`, `js/transit.js`, `js/weather.js`, `js/tracking.js`, `js/app.js`, `js/notify.js`) and share globals. notify.js comes last because it uses app.js helpers (`el`, `fmtDate`, `state`, `render`); app.js only calls into it from event handlers and rendering, never at load. **Don't switch to ES modules**: browsers block them on `file://`, which would break double-click.
 - Build every DOM node with the `el()` helper in `js/app.js` (sets `textContent`). Never use `innerHTML` with CSV data.
 - Dates are UTC midnight `Date` objects (`parseDate`, `isoDate` in `js/transit.js`) so a timezone can't shift a day.
 
@@ -54,6 +54,8 @@ Plain HTML, CSS and JavaScript, no build step, no dependencies. The user opens `
 
 **Delay notices (notify.js):** row checkboxes (`selectBox`, in the Order cell) fill `state.selected`; `renderSelectionBar` draws "Select all that need attention", the count and **Notify customers…**, which calls `openNotifyDialog`. That builds one notice per selected order with `buildNotice` → `fillTemplate` (placeholders; `{delay_update}` picks a sentence by situation: flagged / weather but on time / nothing predicted; `{carrier_section}` by shipped + tracking number). The page never sends email: **Send all emails** is a simulation (the user's choice for this prototype) that marks every listed customer notified; the real paths are a per-customer `mailto:` draft link, copy, or CSV download. Opening a draft only shows "Draft opened" for this visit and does not mark the order. Clicking a recipient's name (`.recipient-button`) sets `previewId`, so the preview shows that customer. `localStorage` (keys `drc-notified`, `drc-notify-template`) remembers notified dates and the edited template; every access is wrapped so the page works without storage. Delivered orders can't be selected (`canNotify`). Optional CSV columns: `OPTIONAL_COLUMNS` in app.js (`customer_name`, `customer_email`, `tracking_number`); a malformed email is treated as missing, and tracking numbers are ignored for unshipped orders.
 
+**Shipment progress (tracking.js):** `shipmentProgress(o)` returns `null` for unshipped orders, else `{ stage, text, simulated, trackingNumber, trackingUrl }`; `progressLine` (app.js) shows it under the ship date, linked to the UPS tracking page. It's **simulated from the dates** (`TRACKING_SOURCE = "simulated"`; the user chose this until a UPS account exists): ship day = label-created, last Expected day = out-for-delivery, after it = delivered (same rule as `status === "delivered"`), else in-transit; no tracking number = "Tracking # missing" (order still loads). Real UPS tracking needs the user's UPS developer credentials and a server/serverless proxy (secrets can't live on the public site, and UPS doesn't allow browser calls); replace `shipmentProgress` with a function returning the same shape. **Expected** dates are our estimate, never UPS's scheduled delivery date; its column heading says so in a tooltip (`title` on the column in `COLUMNS`).
+
 **Naming trap:** `estimateDelivery()` returns `earliest` and `promised`, but that `promised` is the **latest expected delivery** (slow end of transit), not the customer's promise. `parseOrder` renames them to `expectedEarliest` / `expectedLatest` and sets the real `promised` from `promisedDate(orderDate)`.
 
 **ZIP lookup:** `data/zip-coords.js` defines `window.ZIP_COORDS` (ZIP to `[lat, lon]`). `locateZip` falls back to the average location of the 3-digit prefix (built lazily by `buildZip3Centers`) and marks the order `approximateLocation`, shown as "(approx.)".
@@ -62,7 +64,8 @@ Plain HTML, CSS and JavaScript, no build step, no dependencies. The user opens `
 
 - **A table column:** add an entry to `COLUMNS` (key, label, `sortValue`) and a matching `case` in `cellContent`. Recheck the 1024 px fit.
 - **A summary filter:** add a predicate to `FILTERS`, a tooltip to `FILTER_HINTS`, and a `statBox(...)` call in `renderSummary`.
-- **A CSV column:** add it to `REQUIRED_COLUMNS` and read it with `get("<name>")` in `parseOrder`; update the README's CSV table.
+- **A CSV column:** add it to `REQUIRED_COLUMNS` (or `OPTIONAL_COLUMNS`) and read it with `get("<name>")` in `parseOrder`; then update `data/orders_template.csv`, the columns table in `guide.html`, and the README's CSV table.
+- **Any rule users must follow** (ZIP handling, service levels, Ground restrictions, dates): `guide.html` documents it for people filling in files. Keep it in sync, and only state what the code actually does (test it).
 - **Transit or promise rules:** the constants at the top of `js/transit.js`.
 - **Which weather counts, timeout, concurrency:** the constants at the top of `js/weather.js` (`SEVERE_LEVELS`, `EMERGENCY_EVENTS`, `SNOW_LIMIT_INCHES`).
 - **Which places/days are checked:** `weatherChecks` in `js/app.js`. Unshipped processing time: `UNSHIPPED_PROCESSING_DAYS`.
@@ -93,6 +96,8 @@ These are the user's decisions. Don't change them without asking.
 - Laptop: a table that must fit at 1024 px without sideways scrolling; Promised and Expected are pinned right when narrower. At 720 px and below: one card per order.
 - The summary boxes (Need attention, Orders, Ground, Air) are the filters; there is no checkbox.
 - Colors are CSS variables on `:root` with a dark-mode set; keep both in sync.
+- The pinned-columns and phone-card table styles are scoped to `#orders-table`, so other tables (the guide's `.guide-table`) aren't affected. Keep new table rules scoped the same way.
+- `guide.html` shares `styles.css`; it's linked from the upload area (with the template and sample downloads) and from the "missing columns" / "no orders" error messages.
 
 ## Testing changes
 

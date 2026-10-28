@@ -116,7 +116,9 @@ function loadOrders(text, fileName) {
   const rows = parseCSV(text);
   if (rows.length < 2) {
     results.hidden = true;
-    showMessage("error", `"${fileName}" has no orders in it.`);
+    showMessage("error", `"${fileName}" has no orders in it.`, [
+      "Add one row per order below the header row. The field guide (link above) explains each column.",
+    ]);
     return;
   }
 
@@ -127,6 +129,7 @@ function loadOrders(text, fileName) {
     showMessage("error", `"${fileName}" is missing ${missing.length === 1 ? "a column" : "columns"}:`, [
       missing.join(", "),
       `Expected columns: ${REQUIRED_COLUMNS.join(", ")}. Optional: ${OPTIONAL_COLUMNS.join(", ")}.`,
+      "Download the template or read the field guide (links above) for what each column needs.",
     ]);
     return;
   }
@@ -409,6 +412,9 @@ const COLUMNS = [
   {
     key: "expected",
     label: "Expected",
+    title:
+      "Our estimate: ship date + typical UPS transit time for the service and distance, " +
+      "skipping weekends and holidays. Not UPS's scheduled delivery date.",
     sortValue: (o) => RISK_ORDER[o.risk] * 1e6 - o.daysLate * 1e3 + o.expectedLatest.getTime() / 864e5,
   },
 ];
@@ -467,6 +473,7 @@ function cellContent(key, o) {
       return el("div", {}, [
         el("span", { class: "nowrap", text: fmtDate(o.shipDate) }),
         el("span", { class: "sub", text: fmtProcessing(o.processingDays) }),
+        progressLine(o),
       ]);
     case "promised":
       return el("span", { class: "promised nowrap", text: fmtDate(o.promised) });
@@ -477,6 +484,30 @@ function cellContent(key, o) {
         weatherNote(o),
       ]);
   }
+}
+
+// Under the ship date: where the package is (see tracking.js), linked to UPS.
+function progressLine(o) {
+  const p = shipmentProgress(o);
+  if (!p) return null;
+  if (p.stage === "missing") {
+    return el("span", {
+      class: "sub progress progress-missing",
+      text: p.text,
+      title: "This order has a ship date but no tracking number in the file.",
+    });
+  }
+  return el("span", { class: `sub progress progress-${p.stage}` }, [
+    el("a", {
+      href: p.trackingUrl,
+      target: "_blank",
+      rel: "noopener",
+      text: p.text,
+      title:
+        `${p.simulated ? "Simulated from the dates, not live UPS tracking. " : ""}` +
+        `Tracking # ${p.trackingNumber}: opens the UPS tracking page.`,
+    }),
+  ]);
 }
 
 // Under the Expected date: what weather could delay it, where and when; or why
@@ -578,9 +609,15 @@ function renderSummary() {
   );
 
   const shown = orders.filter(FILTERS[state.filter]).length;
-  document.getElementById("filter-bar").replaceChildren(
-    el("p", { class: "filter-status", text: `Showing ${shown} of ${orders.length} orders` })
-  );
+  const notes = [`Showing ${shown} of ${orders.length} orders.`];
+  const missingTracking = orders.filter((o) => o.shipped && !o.trackingNumber).length;
+  if (missingTracking) {
+    notes.push(`${missingTracking} shipped ${missingTracking === 1 ? "order has" : "orders have"} no tracking number.`);
+  }
+  if (TRACKING_SOURCE === "simulated" && orders.some((o) => o.trackingNumber)) {
+    notes.push("Shipment progress is simulated from the dates, not live UPS tracking.");
+  }
+  document.getElementById("filter-bar").replaceChildren(el("p", { class: "filter-status", text: notes.join(" ") }));
 }
 
 // A summary box. With a `filter` (and something to show), clicking it filters the
@@ -629,7 +666,7 @@ function renderTable() {
       {},
       columns.map((c) => {
         const th = el("th", { scope: "col", class: c.num ? "num" : "" }, [
-          el("button", { type: "button", text: c.label }),
+          el("button", { type: "button", text: c.label, ...(c.title ? { title: c.title } : {}) }),
         ]);
         if (c.key === sortCol.key) th.setAttribute("aria-sort", dir === 1 ? "ascending" : "descending");
         th.querySelector("button").addEventListener("click", () => {

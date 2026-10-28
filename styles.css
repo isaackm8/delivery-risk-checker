@@ -69,7 +69,25 @@ body {
   clip: rect(0 0 0 0);
 }
 
+a { color: var(--accent); }
+
+code {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--accent-soft);
+  font: 0.88em/1.4 ui-monospace, "Cascadia Mono", Consolas, monospace;
+  overflow-wrap: anywhere;
+}
+
 /* Upload */
+
+.upload-help {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+  margin: 6px 0 0;
+  font-size: 0.9rem;
+}
 
 .drop-zone {
   display: flex;
@@ -151,6 +169,9 @@ button.stat:focus-visible { outline: 2px solid var(--accent); outline-offset: 2p
 .weather-status { margin: 4px 0 0; color: var(--muted); font-size: 0.9rem; }
 .weather-alert { color: var(--warn); font-weight: 600; }
 .not-shipped { font-weight: 600; color: var(--warn); }
+.progress a { font-weight: 600; }
+.progress-delivered a { color: var(--ok); }
+.progress-missing { color: var(--warn); font-weight: 600; }
 
 /* Buttons */
 
@@ -375,15 +396,15 @@ th.num { text-align: right; }
 /* Promised and Expected (the last two columns) are pinned to the right edge,
    so they stay visible if the table scrolls sideways. Expected has a fixed
    width so Promised knows where to sit. */
-th:last-child, td:last-child,
-th:nth-last-child(2), td:nth-last-child(2) {
+#orders-table th:last-child, #orders-table td:last-child,
+#orders-table th:nth-last-child(2), #orders-table td:nth-last-child(2) {
   position: sticky;
   background: var(--surface);
 }
 
-th:last-child, td:last-child { right: 0; width: 120px; min-width: 120px; }
+#orders-table th:last-child, #orders-table td:last-child { right: 0; width: 120px; min-width: 120px; }
 
-th:nth-last-child(2), td:nth-last-child(2) {
+#orders-table th:nth-last-child(2), #orders-table td:nth-last-child(2) {
   right: 120px;
   box-shadow: inset 1px 0 0 var(--border);
 }
@@ -398,10 +419,10 @@ th:nth-last-child(2), td:nth-last-child(2) {
 
 @media (max-width: 720px) {
   .table-wrap { background: none; border: none; overflow: visible; }
-  thead { display: none; }
-  table, tbody, tr, td { display: block; width: 100%; }
+  #orders-table thead { display: none; }
+  #orders-table, #orders-table tbody, #orders-table tr, #orders-table td { display: block; width: 100%; }
 
-  tr {
+  #orders-table tr {
     margin-bottom: 12px;
     background: var(--surface);
     border: 1px solid var(--border);
@@ -409,7 +430,7 @@ th:nth-last-child(2), td:nth-last-child(2) {
     padding: 6px 0;
   }
 
-  td {
+  #orders-table td {
     display: flex;
     justify-content: space-between;
     gap: 16px;
@@ -418,7 +439,7 @@ th:nth-last-child(2), td:nth-last-child(2) {
     text-align: right;
   }
 
-  td::before {
+  #orders-table td::before {
     content: attr(data-label);
     color: var(--muted);
     font-size: 0.85rem;
@@ -426,11 +447,11 @@ th:nth-last-child(2), td:nth-last-child(2) {
     flex-shrink: 0;
   }
 
-  td.num { text-align: right; }
-  td > div { min-width: 0; }
+  #orders-table td.num { text-align: right; }
+  #orders-table td > div { min-width: 0; }
   .product-cell, .service-cell { min-width: 0; }
   .product-cell .sub { display: block; }
-  td:last-child, td:nth-last-child(2) {
+  #orders-table td:last-child, #orders-table td:nth-last-child(2) {
     position: static;
     width: 100%;
     min-width: 0;
@@ -438,3 +459,28 @@ th:nth-last-child(2), td:nth-last-child(2) {
     box-shadow: none;
   }
 }
+
+/* CSV field guide page */
+
+.back-link { margin: 0 0 8px; font-size: 0.9rem; }
+.guide { padding-bottom: 8px; }
+.guide section { margin-top: 28px; }
+.guide h2 { margin: 0 0 10px; font-size: 1.25rem; }
+.guide h3 { margin: 18px 0 6px; font-size: 1rem; }
+.guide p, .guide li { max-width: 78ch; }
+.guide li { margin-bottom: 6px; }
+.guide-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 4px; }
+
+.guide-table {
+  overflow-x: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.guide-table table { min-width: 640px; }
+.guide-table td { font-size: 0.92rem; }
+.guide-table td:first-child > code:only-child { white-space: nowrap; }
+.guide-table .badge { margin-right: 4px; }
+
+.checklist { list-style: none; padding-left: 0; }
+.checklist li::before { content: "☐ "; color: var(--muted); }

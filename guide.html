@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CSV Field Guide</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <p class="back-link"><a href="index.html">← Back to Delivery Risk Checker</a></p>
+    <h1>CSV field guide</h1>
+    <p class="tagline">How to fill in an order file the Delivery Risk Checker can read.</p>
+  </header>
+
+  <main class="guide">
+    <section class="guide-actions" aria-label="Files">
+      <a class="button-primary" href="data/orders_template.csv" download="orders_template.csv">Download the template</a>
+      <a class="button-secondary" href="data/sample_orders.csv" download="sample_orders.csv">Download the sample file</a>
+      <a class="button-secondary" href="index.html">Open the checker</a>
+    </section>
+
+    <section aria-labelledby="quick-start">
+      <h2 id="quick-start">Quick start</h2>
+      <ol>
+        <li><strong>Download the template.</strong> It's a CSV file with the 12 column headers and no orders.</li>
+        <li><strong>Add one row per order</strong> in Excel, Google Sheets or any spreadsheet. Keep the header row.</li>
+        <li><strong>Save as CSV</strong> (in Excel: File → Save As → "CSV UTF-8").</li>
+        <li><strong>Open the checker</strong> and drop the file onto the upload box.</li>
+      </ol>
+      <p>Not sure what a filled-in file looks like? Download the sample file: 50 made-up orders that use every column.</p>
+    </section>
+
+    <section aria-labelledby="general-rules">
+      <h2 id="general-rules">General rules</h2>
+      <ul>
+        <li><strong>The first row must be the column headers.</strong> Each following row is one order.</li>
+        <li><strong>9 columns are required, 3 are optional.</strong> If a required column is missing, nothing loads and the page lists what's missing.</li>
+        <li><strong>Header names are forgiving:</strong> capitals, spaces and hyphens don't matter, so <code>Order ID</code>, <code>order-id</code> and <code>order_id</code> all work. Other names (e.g. <code>Ship To Zip</code>) aren't recognized: rename them to the names below.</li>
+        <li><strong>Column order doesn't matter</strong>, and extra columns are ignored, so you can keep your own notes in the file.</li>
+        <li><strong>A value containing a comma</strong> (like <code>$1,200.50</code> or <code>Mug, 12 oz</code>) must be in double quotes. Spreadsheet programs do this for you when saving as CSV.</li>
+        <li><strong>A row with a problem is skipped, not the whole file.</strong> Skipped rows are listed at the top of the page with the line number and the reason, so you can fix them and load the file again.</li>
+        <li><strong>Your file stays in your browser.</strong> It's never uploaded. To check the weather, only ZIP code center points are sent to the National Weather Service.</li>
+      </ul>
+    </section>
+
+    <section aria-labelledby="columns">
+      <h2 id="columns">The columns</h2>
+      <div class="guide-table">
+        <table>
+          <thead>
+            <tr><th scope="col">Column</th><th scope="col">Needed?</th><th scope="col">What it means</th><th scope="col">Format and rules</th><th scope="col">Example</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>order_id</code></td><td><span class="badge warn">Required</span></td>
+              <td>Your order number.</td>
+              <td>Any text. Must not be empty. Use a different one for each order: it's how orders are told apart.</td>
+              <td><code>ORD-20481</code></td>
+            </tr>
+            <tr>
+              <td><code>customer_name</code></td><td><span class="badge neutral">Optional</span></td>
+              <td>The customer's name, used to greet them in delay notices.</td>
+              <td>Any text. The first word is used ("Hi Ava"). Blank: "Hi there".</td>
+              <td><code>Ava Thompson</code></td>
+            </tr>
+            <tr>
+              <td><code>customer_email</code></td><td><span class="badge neutral">Optional</span></td>
+              <td>Where to send a delay notice.</td>
+              <td>Must look like <code>name@domain.com</code>. Anything else is treated as missing, and that customer is skipped when notifying.</td>
+              <td><code>ava@example.com</code></td>
+            </tr>
+            <tr>
+              <td><code>order_date</code></td><td><span class="badge warn">Required</span></td>
+              <td>The day the customer placed the order. The promised delivery date is this plus 7 business days.</td>
+              <td><code>YYYY-MM-DD</code> or <code>M/D/YYYY</code>. Must be a real date. Weekend and holiday orders count from the next business day.</td>
+              <td><code>2026-10-15</code></td>
+            </tr>
+            <tr>
+              <td><code>order_value</code></td><td><span class="badge warn">Required</span></td>
+              <td>What the order is worth.</td>
+              <td>A number. <code>$</code> and thousands commas are fine (quote the value if it has a comma).</td>
+              <td><code>64.00</code></td>
+            </tr>
+            <tr>
+              <td><code>product_name</code></td><td><span class="badge warn">Required column</span></td>
+              <td>What was bought.</td>
+              <td>Any text; may be blank. Shown in the table and the delay notice.</td>
+              <td><code>Pour-Over Coffee Kit</code></td>
+            </tr>
+            <tr>
+              <td><code>product_description</code></td><td><span class="badge warn">Required column</span></td>
+              <td>A short description of the product.</td>
+              <td>Any text; may be blank.</td>
+              <td><code>Ceramic dripper and filters</code></td>
+            </tr>
+            <tr>
+              <td><code>origin_zip</code></td><td><span class="badge warn">Required</span></td>
+              <td>The ZIP code the package ships from (your warehouse).</td>
+              <td>A US ZIP code. See <a href="#zip-codes">ZIP codes</a> for what's accepted.</td>
+              <td><code>43228</code></td>
+            </tr>
+            <tr>
+              <td><code>destination_zip</code></td><td><span class="badge warn">Required</span></td>
+              <td>The ZIP code the package is going to.</td>
+              <td>A US ZIP code. See <a href="#zip-codes">ZIP codes</a>.</td>
+              <td><code>02139</code></td>
+            </tr>
+            <tr>
+              <td><code>ups_service_level</code></td><td><span class="badge warn">Required</span></td>
+              <td>The UPS service the order ships with.</td>
+              <td>One of the names in <a href="#service-levels">Service levels</a>.</td>
+              <td><code>UPS Ground</code></td>
+            </tr>
+            <tr>
+              <td><code>ship_date</code></td><td><span class="badge warn">Required column</span></td>
+              <td>The day the label was created and UPS picked the package up.</td>
+              <td><code>YYYY-MM-DD</code> or <code>M/D/YYYY</code>, not before the order date. <strong>Leave blank if not shipped yet:</strong> the checker then assumes 1 business day of processing.</td>
+              <td><code>2026-10-19</code></td>
+            </tr>
+            <tr>
+              <td><code>tracking_number</code></td><td><span class="badge neutral">Optional</span></td>
+              <td>The UPS tracking number. It links the order's shipment progress to UPS, and lets a delay notice send the customer to UPS to reroute or hold the package.</td>
+              <td>Every order with a <code>ship_date</code> should have one; if it's missing the order still loads but shows "Tracking # missing". Spaces are removed. Ignored for orders that haven't shipped.</td>
+              <td><code>1Z999AA10123456784</code></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section aria-labelledby="zip-codes">
+      <h2 id="zip-codes">ZIP codes</h2>
+      <p>The checker knows the location of 33,791 US ZIP codes, from the US Census Bureau. It uses each ZIP's center point to measure distance and check the weather.</p>
+      <div class="guide-table">
+        <table>
+          <thead>
+            <tr><th scope="col">ZIP</th><th scope="col">What happens</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>A regular 5-digit US ZIP, including Alaska, Hawaii, Puerto Rico, Guam and the US Virgin Islands</td><td><span class="badge ok">Works</span> Exact location.</td></tr>
+            <tr><td>ZIP+4 (<code>43228-1234</code>)</td><td><span class="badge ok">Works</span> Only the first 5 digits are used.</td></tr>
+            <tr><td>A ZIP that lost its leading zero in Excel (<code>2139</code> for <code>02139</code>)</td><td><span class="badge ok">Works</span> The zeros are added back.</td></tr>
+            <tr><td>A ZIP for a single building or PO boxes only (e.g. <code>10118</code>, <code>99950</code>)</td><td><span class="badge warn">Approximate</span> These aren't in the Census list, so the checker uses the average location of ZIPs with the same first 3 digits, shown as "(approx.)". Usually close enough for distance and weather.</td></tr>
+            <tr><td>Military APO, FPO and DPO addresses (ZIPs starting <code>090</code>–<code>099</code>, <code>340</code>, <code>962</code>–<code>966</code>)</td><td><span class="badge bad">Not supported</span> They have no fixed location, so the row is skipped ("wasn't found").</td></tr>
+            <tr><td>Canadian or other non-US postal codes</td><td><span class="badge bad">Not supported</span> The row is skipped ("isn't a 5-digit ZIP").</td></tr>
+            <tr><td>A ZIP that doesn't exist, or letters</td><td><span class="badge bad">Skipped</span> With the reason.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section aria-labelledby="service-levels">
+      <h2 id="service-levels">Service levels</h2>
+      <p>Write the service as UPS names it. Capitals don't matter, and the word "UPS" is optional.</p>
+      <div class="guide-table">
+        <table>
+          <thead>
+            <tr><th scope="col">Accepted name</th><th scope="col">Transit time used</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>UPS Next Day Air</code></td><td>1 business day</td></tr>
+            <tr><td><code>UPS Next Day Air Saver</code></td><td>1 business day</td></tr>
+            <tr><td><code>UPS 2nd Day Air</code> (or <code>Second Day Air</code>)</td><td>2 business days</td></tr>
+            <tr><td><code>UPS 3 Day Select</code></td><td>3 business days</td></tr>
+            <tr><td><code>UPS Ground</code></td><td>1 to 7 business days, by distance (see the project README)</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Other services (e.g. UPS SurePost, Worldwide Express, or other carriers) aren't recognized; those rows are skipped.</p>
+      <h3>Where UPS Ground can go</h3>
+      <ul>
+        <li><strong>Not to or from Hawaii.</strong> Use an air service; Ground rows are skipped with this reason.</li>
+        <li><strong>Not between Alaska and the rest of the US.</strong> Ground within Alaska is fine.</li>
+        <li><strong>Puerto Rico, Guam and other territories:</strong> UPS Ground doesn't serve them from the mainland either, but the checker <em>doesn't check this yet</em>. A Ground order to a territory gets an ordinary Ground estimate, which will be too optimistic. Use an air service for these.</li>
+      </ul>
+    </section>
+
+    <section aria-labelledby="dates">
+      <h2 id="dates">Dates and "today"</h2>
+      <ul>
+        <li>Business days are Monday to Friday, skipping New Year's Day, Memorial Day, Independence Day, Labor Day, Thanksgiving and Christmas.</li>
+        <li>The checker judges every order as of <strong>today</strong>: an order whose expected delivery has passed is treated as likely delivered (it isn't checked for weather and can't be selected for a delay notice). This is a guess from the dates, not tracking.</li>
+        <li>To see a file as of another day, add <code>?today=YYYY-MM-DD</code> to the checker's address, e.g. <code>index.html?today=2026-10-28</code>.</li>
+      </ul>
+    </section>
+
+    <section aria-labelledby="checklist">
+      <h2 id="checklist">Before you upload: a quick checklist</h2>
+      <ul class="checklist">
+        <li>The header row is there, with the 9 required columns.</li>
+        <li>Every order has an <code>order_id</code>, an <code>order_date</code> and a number in <code>order_value</code>.</li>
+        <li>Both ZIP codes are US ZIPs (no military or foreign addresses).</li>
+        <li>The service level is one of the five UPS names, and Ground isn't used for Hawaii, Alaska-to-mainland or territory orders.</li>
+        <li><code>ship_date</code> is blank for orders that haven't shipped, and never before the order date.</li>
+        <li>Every shipped order has a <code>tracking_number</code>.</li>
+        <li>To send delay notices: <code>customer_email</code> is filled in.</li>
+        <li>The file is saved as CSV, not as an Excel workbook (.xlsx).</li>
+      </ul>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <p><a href="index.html">← Back to Delivery Risk Checker</a></p>
+  </footer>
+</body>
+</html>
