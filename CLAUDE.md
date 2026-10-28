@@ -29,7 +29,7 @@ The app's "today" is the computer's date; `index.html?today=YYYY-MM-DD` override
 - Explain each step in plain language as you go; the user approves steps one at a time.
 - Commit only when asked, and push only when asked (they are separate approvals).
 - Never commit the `.claude/` folder (local test-server config).
-- Git identity for this repo is set locally to `isaackm8 <isaackm8@gmail.com>`; leave it alone. Remote: `https://github.com/isaackm8/delivery-risk-checker`, branch `main`.
+- Git identity for this repo is set locally to user `isaackm8` with GitHub's private noreply email; leave it alone, and never put the user's personal email in files or commits (the repository is public). Remote: `https://github.com/isaackm8/delivery-risk-checker`, branch `main`.
 
 ## The app
 
